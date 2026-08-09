@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -8,29 +8,51 @@ const inter = Inter({
   display: "swap",
 });
 
+export const viewport: Viewport = {
+  themeColor: "#0a0a0c",
+  width: "device-width",
+  initialScale: 1,
+};
+
 export const metadata: Metadata = {
-  title: "Invoice.In — Aplikasi Pembuat Invoice & Manajemen Bisnis Praktis",
+  title: {
+    default: "Invoice.In — Aplikasi Pembuat Invoice & Manajemen Bisnis Praktis",
+    template: "%s | Invoice.In",
+  },
   description:
-    "Buat invoice profesional dalam hitungan detik, pantau status pembayaran, dan kelola arus kas bisnis Anda secara otomatis dengan Invoice.In.",
+    "Buat invoice profesional dalam hitungan detik, pantau status pembayaran, hitung uang muka (DP) & pajak otomatis, cetak PDF resmi, dan kelola keuangan bisnis Anda dengan Invoice.In.",
+  applicationName: "Invoice.In",
   keywords: [
-    "invoice",
-    "faktur",
-    "invoice generator",
-    "aplikasi invoice",
-    "tagihan",
-    "billing",
-    "payments",
     "Invoice.In",
-    "tour travel invoice",
-    "business finance"
+    "invoice generator indonesia",
+    "aplikasi pembuat invoice",
+    "buat faktur online",
+    "invoice tour travel",
+    "tagihan bisnis",
+    "cetak invoice pdf",
+    "software invoice gratis",
+    "manajemen keuangan usaha",
+    "faktur pembayaran",
+    "rekapitulasi tagihan"
   ],
-  authors: [{ name: "Invoice.In" }],
+  authors: [{ name: "Invoice.In Official", url: "https://invoicein.id" }],
   creator: "Invoice.In",
+  publisher: "Invoice.In",
   metadataBase: new URL("https://invoicein.id"),
+  alternates: {
+    canonical: "/",
+  },
   icons: {
-    icon: "/images/logoin2.png",
-    shortcut: "/images/logoin2.png",
-    apple: "/images/logoin2.png",
+    icon: [
+      { url: "/images/logoin2.png", sizes: "any" },
+      { url: "/icon.png", type: "image/png" },
+      { url: "/favicon.ico" }
+    ],
+    shortcut: ["/images/logoin2.png"],
+    apple: [
+      { url: "/images/logoin2.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-icon.png" }
+    ],
   },
   openGraph: {
     title: "Invoice.In — Solusi Pembuatan Invoice & Penagihan Bisnis Cerdas",
@@ -38,16 +60,16 @@ export const metadata: Metadata = {
       "Buat dan kirim invoice resmi berstandar profesional dalam hitungan detik. Lacak status pembayaran, terima uang muka (DP), dan unduh PDF otomatis.",
     url: "https://invoicein.id",
     siteName: "Invoice.In",
+    locale: "id_ID",
+    type: "website",
     images: [
       {
         url: "/images/logoin2.png",
         width: 800,
         height: 800,
-        alt: "Invoice.In Official Logo",
+        alt: "Invoice.In - Aplikasi Pembuat Invoice & Manajemen Bisnis Praktis",
       },
     ],
-    locale: "id_ID",
-    type: "website",
   },
   twitter: {
     card: "summary_large_image",
@@ -55,6 +77,18 @@ export const metadata: Metadata = {
     description:
       "Buat invoice profesional dalam hitungan detik, lacak pembayaran, dan kelola keuangan bisnis Anda dengan Invoice.In.",
     images: ["/images/logoin2.png"],
+    creator: "@invoicein",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
   },
 };
 
@@ -62,9 +96,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="id" className={inter.variable} suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/images/logoin2.png" type="image/png" />
-        <meta property="og:image" content="/images/logoin2.png" />
-        <meta property="twitter:image" content="/images/logoin2.png" />
+        <link rel="icon" href="/images/logoin2.png" type="image/png" sizes="any" />
+        <link rel="apple-touch-icon" href="/images/logoin2.png" />
       </head>
       <body suppressHydrationWarning>{children}</body>
     </html>
