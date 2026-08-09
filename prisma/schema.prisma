@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  password     String
+  username     String
+  role         String    @default("USER") // "USER" | "SUPERADMIN"
+  company      Company?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Company {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName    String    @default("Nama Perusahaan")
+  industry       String?   @default("Bisnis & Jasa")
+  companyAddress String?   @db.Text
+  taxId          String?
+  phone          String?
+  email          String?
+  website        String?
+  bankName       String?   @default("Bank Central Asia (BCA)")
+  accountNumber  String?
+  accountHolder  String?
+  defaultNotes   String?   @db.Text
+  logoBase64     String?   @db.Text
+  themeColor     String    @default("#2563eb")
+  invoices       Invoice[]
+  clients        Client[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Client {
+  id          String    @id @default(cuid())
+  companyId   String
+  companyRef  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  company     String?
+  email       String?
+  phone       String?
+  address     String?   @db.Text
+  status      String    @default("Active") // "Active" | "VIP" | "Inactive"
+  invoices    Invoice[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Invoice {
+  id                  String        @id @default(cuid())
+  companyId           String
+  companyRef          Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientId            String?
+  clientRef           Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  invoiceNumber       String
+  clientName          String
+  clientEmail         String?
+  clientAddress       String?       @db.Text
+  issueDate           DateTime      @default(now())
+  dueDate             DateTime
+  currency            String        @default("IDR")
+  taxRate             Float         @default(0)
+  downPayment         Float         @default(0)
+  downPaymentType     String        @default("nominal") // "nominal" | "percent"
+  subtotal            Float         @default(0)
+  discount            Float         @default(0)
+  totalAmount         Float         @default(0)
+  amountPaid          Float         @default(0)
+  balanceDue          Float         @default(0)
+  status              String        @default("Pending") // "Paid" | "Pending" | "Overdue" | "Draft"
+  notes               String?       @db.Text
+  paymentInstructions String?       @db.Text
+  createdBy           String?
+  items               InvoiceItem[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoiceRef  Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Float    @default(0)
+  amount      Float    @default(0)
+  createdAt   DateTime @default(now())
+}
