@@ -14,6 +14,21 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+const getSiteUrl = () => {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return "https://invoicein.id";
+};
+
+const siteUrl = getSiteUrl();
+
 export const metadata: Metadata = {
   title: {
     default: "Invoice.In — Aplikasi Pembuat Invoice & Manajemen Bisnis Praktis",
@@ -35,10 +50,10 @@ export const metadata: Metadata = {
     "faktur pembayaran",
     "rekapitulasi tagihan"
   ],
-  authors: [{ name: "Invoice.In Official", url: "https://invoicein.id" }],
+  authors: [{ name: "Invoice.In Official", url: siteUrl }],
   creator: "Invoice.In",
   publisher: "Invoice.In",
-  metadataBase: new URL("https://invoicein.id"),
+  metadataBase: new URL(siteUrl),
   alternates: {
     canonical: "/",
   },
@@ -58,15 +73,15 @@ export const metadata: Metadata = {
     title: "Invoice.In — Solusi Pembuatan Invoice & Penagihan Bisnis Cerdas",
     description:
       "Buat dan kirim invoice resmi berstandar profesional dalam hitungan detik. Lacak status pembayaran, terima uang muka (DP), dan unduh PDF otomatis.",
-    url: "https://invoicein.id",
+    url: siteUrl,
     siteName: "Invoice.In",
     locale: "id_ID",
     type: "website",
     images: [
       {
         url: "/images/logoin2.png",
-        width: 800,
-        height: 800,
+        width: 1200,
+        height: 630,
         alt: "Invoice.In - Aplikasi Pembuat Invoice & Manajemen Bisnis Praktis",
       },
     ],
@@ -98,6 +113,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="icon" href="/images/logoin2.png" type="image/png" sizes="any" />
         <link rel="apple-touch-icon" href="/images/logoin2.png" />
+        <meta property="og:site_name" content="Invoice.In" />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="/images/logoin2.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:type" content="image/png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content="/images/logoin2.png" />
       </head>
       <body suppressHydrationWarning>{children}</body>
     </html>
