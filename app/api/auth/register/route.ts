@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { hashPassword, signAuthToken, setAuthCookie } from "@/lib/auth";
+import { hashPassword, signAuthToken, AUTH_COOKIE_NAME } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -80,10 +80,8 @@ export async function POST(req: NextRequest) {
       role: newUser.user.role,
     });
 
-    // 6. Set HTTP-Only Secure Cookie
-    await setAuthCookie(token);
-
-    return NextResponse.json(
+    // 6. Return response with cookie
+    const response = NextResponse.json(
       {
         success: true,
         message: "Pendaftaran akun berhasil!",
@@ -97,6 +95,16 @@ export async function POST(req: NextRequest) {
       },
       { status: 201 }
     );
+
+    response.cookies.set(AUTH_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      path: "/",
+    });
+
+    return response;
   } catch (error) {
     console.error("Register Error:", error);
     return NextResponse.json(

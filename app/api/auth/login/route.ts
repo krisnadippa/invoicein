@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyPassword, signAuthToken, setAuthCookie } from "@/lib/auth";
+import { verifyPassword, signAuthToken, AUTH_COOKIE_NAME } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,10 +47,8 @@ export async function POST(req: NextRequest) {
       role: user.role,
     });
 
-    // 5. Set HTTP-only Cookie
-    await setAuthCookie(token);
-
-    return NextResponse.json(
+    // 5. Create response and set cookie directly on response
+    const response = NextResponse.json(
       {
         success: true,
         message: "Berhasil masuk ke akun!",
@@ -64,10 +62,20 @@ export async function POST(req: NextRequest) {
       },
       { status: 200 }
     );
+
+    response.cookies.set(AUTH_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      path: "/",
+    });
+
+    return response;
   } catch (error) {
-    console.error("Login Error:", error);
+    console.error("Login Server Error:", error);
     return NextResponse.json(
-      { success: false, message: "Terjadi kesalahan server saat masuk. Silakan coba lagi." },
+      { success: false, message: "Terjadi kesalahan koneksi server saat masuk. Silakan coba lagi." },
       { status: 500 }
     );
   }
