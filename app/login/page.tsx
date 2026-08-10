@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { EtherealShadow } from "@/components/ui/etheral-shadow";
+import { authClient } from "@/lib/neon-auth-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,6 +19,22 @@ export default function LoginPage() {
   const [isExiting, setIsExiting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsLoggingIn(true);
+      setErrorMessage("");
+      const origin = window.location.origin;
+      await authClient.signIn.social({
+        provider: "google",
+        callbackURL: `${origin}/api/auth/neon/callback`,
+      });
+    } catch (err) {
+      console.error("Google sign in error", err);
+      setIsLoggingIn(false);
+      setErrorMessage("Gagal menghubungkan ke akun Google. Silakan coba lagi.");
+    }
+  };
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -156,8 +173,9 @@ export default function LoginPage() {
           </div>
 
           {/* 1-Click Google Sign In powered by Neon Auth */}
-          <a
-            href="/api/auth/google"
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
             style={{
               display: "flex",
               alignItems: "center",
@@ -171,7 +189,7 @@ export default function LoginPage() {
               color: "#1e293b",
               fontSize: "14px",
               fontWeight: 600,
-              textDecoration: "none",
+              cursor: "pointer",
               transition: "all 0.2s ease",
               boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
               marginBottom: "20px",
@@ -184,7 +202,7 @@ export default function LoginPage() {
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
             </svg>
             <span>Lanjutkan dengan Google</span>
-          </a>
+          </button>
 
           <div className="auth-divider" style={{ margin: "0 0 20px 0" }}>
             <span>atau masuk dengan email</span>

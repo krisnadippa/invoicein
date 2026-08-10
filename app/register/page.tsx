@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { EtherealShadow } from "@/components/ui/etheral-shadow";
+import { authClient } from "@/lib/neon-auth-client";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -29,6 +30,22 @@ export default function RegisterPage() {
   const [isExiting, setIsExiting] = useState(false);
   const [generalError, setGeneralError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  const handleGoogleSignUp = async () => {
+    try {
+      setIsSubmitting(true);
+      setGeneralError("");
+      const origin = window.location.origin;
+      await authClient.signIn.social({
+        provider: "google",
+        callbackURL: `${origin}/api/auth/neon/callback`,
+      });
+    } catch (err) {
+      console.error("Google sign up error", err);
+      setIsSubmitting(false);
+      setGeneralError("Gagal menghubungkan ke akun Google. Silakan coba lagi.");
+    }
+  };
 
   // Check if there is URL error (e.g. from Google OAuth)
   useEffect(() => {
@@ -245,8 +262,9 @@ export default function RegisterPage() {
           </div>
 
           {/* 1-Click Google Sign Up powered by Neon Auth */}
-          <a
-            href="/api/auth/google"
+          <button
+            type="button"
+            onClick={handleGoogleSignUp}
             style={{
               display: "flex",
               alignItems: "center",
@@ -260,7 +278,7 @@ export default function RegisterPage() {
               color: "#1e293b",
               fontSize: "14px",
               fontWeight: 600,
-              textDecoration: "none",
+              cursor: "pointer",
               transition: "all 0.2s ease",
               boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
               marginBottom: "20px",
@@ -273,7 +291,7 @@ export default function RegisterPage() {
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
             </svg>
             <span>Daftar dengan Google</span>
-          </a>
+          </button>
 
           <div className="auth-divider" style={{ margin: "0 0 20px 0" }}>
             <span>atau daftar dengan email</span>
