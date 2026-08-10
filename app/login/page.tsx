@@ -59,24 +59,11 @@ export default function LoginPage() {
     setTouched((prev) => ({ ...prev, [field]: true }));
   };
 
-  const handleSuccessfulLogin = () => {
-    setIsLoggingIn(true);
-    setErrorMessage("");
-    
-    // Smooth exit animation
-    setTimeout(() => {
-      setIsExiting(true);
-    }, 400);
-
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 850);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     setTouched({ email: true, password: true });
+    setErrorMessage("");
 
     if (!email.trim() || !emailRegex.test(email.trim())) {
       setErrorMessage("Silakan masukkan alamat email yang valid.");
@@ -88,7 +75,40 @@ export default function LoginPage() {
       return;
     }
 
-    handleSuccessfulLogin();
+    setIsLoggingIn(true);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setIsLoggingIn(false);
+        setErrorMessage(data.message || "Gagal masuk. Periksa email dan kata sandi Anda.");
+        return;
+      }
+
+      // Save user & company state to localStorage for offline cache
+      if (typeof window !== "undefined") {
+        if (data.user) localStorage.setItem("invoicein_user", JSON.stringify(data.user));
+        if (data.company) localStorage.setItem("companyDetails", JSON.stringify(data.company));
+      }
+
+      // Smooth exit animation and redirect
+      setIsExiting(true);
+      setTimeout(() => {
+        router.push("/dashboard");
+        router.refresh();
+      }, 500);
+    } catch (err) {
+      console.error("Login network error", err);
+      setIsLoggingIn(false);
+      setErrorMessage("Terjadi gangguan koneksi internet. Silakan coba lagi.");
+    }
   };
 
   return (
@@ -317,7 +337,7 @@ export default function LoginPage() {
             <button
               type="button"
               className="btn-social"
-              onClick={handleSuccessfulLogin}
+              onClick={() => setErrorMessage("Fitur Masuk dengan Google akan segera tersedia.")}
               title="Masuk dengan Google"
             >
               <svg width="18" height="18" viewBox="0 0 24 24">
@@ -345,7 +365,7 @@ export default function LoginPage() {
             <button
               type="button"
               className="btn-social"
-              onClick={handleSuccessfulLogin}
+              onClick={() => setErrorMessage("Fitur Masuk dengan WhatsApp akan segera tersedia.")}
               title="Masuk dengan WhatsApp"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="#25D366">
@@ -359,7 +379,7 @@ export default function LoginPage() {
             <button
               type="button"
               className="btn-social"
-              onClick={handleSuccessfulLogin}
+              onClick={() => setErrorMessage("Fitur Masuk dengan Apple ID akan segera tersedia.")}
               title="Masuk dengan Apple"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="#0f172a">

@@ -180,7 +180,7 @@ export default function OnboardingPage() {
     }
   };
 
-  const triggerSetupFlow = () => {
+  const triggerSetupFlow = async () => {
     setIsSettingUp(true);
 
     const companyDetails = {
@@ -201,7 +201,20 @@ export default function OnboardingPage() {
       defaultNotes: "Terima kasih atas kerja samanya. Pembayaran mohon ditransfer ke rekening resmi di atas."
     };
 
-    localStorage.setItem("companyDetails", JSON.stringify(companyDetails));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("companyDetails", JSON.stringify(companyDetails));
+    }
+
+    // Persist company details in Neon PostgreSQL
+    try {
+      await fetch("/api/company", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(companyDetails),
+      });
+    } catch (err) {
+      console.error("Failed to persist company details to DB", err);
+    }
 
     // Smooth progressive timeline transition
     setTimeout(() => {
@@ -227,6 +240,7 @@ export default function OnboardingPage() {
 
     setTimeout(() => {
       router.push("/dashboard");
+      router.refresh();
     }, 3100);
   };
 

@@ -260,12 +260,27 @@ export default function Sidebar({
           </Link>
         )}
 
-        <Link href="/login" className="sidebar-nav-item" style={{ color: '#ef4444', padding: '8px 12px' }} onClick={handleLinkClick}>
+        <button 
+          onClick={async () => {
+            try {
+              await fetch("/api/auth/logout", { method: "POST" });
+            } catch (err) {
+              console.error("Logout error", err);
+            }
+            if (typeof window !== "undefined") {
+              localStorage.removeItem("invoicein_user");
+            }
+            if (onCloseMobile) onCloseMobile();
+            window.location.href = "/login";
+          }}
+          className="sidebar-nav-item" 
+          style={{ color: '#ef4444', padding: '8px 12px', background: 'none', border: 'none', width: '100%', textAlign: 'left', cursor: 'pointer' }}
+        >
           <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
           {!isCollapsed && <span>Keluar Akun</span>}
-        </Link>
+        </button>
       </div>
     </aside>
   );

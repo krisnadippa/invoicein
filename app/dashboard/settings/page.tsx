@@ -64,16 +64,26 @@ export default function SettingsPage() {
     setCompanyDetails(prev => ({ ...prev, logoBase64: "" }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
-    localStorage.setItem("companyDetails", JSON.stringify(companyDetails));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("companyDetails", JSON.stringify(companyDetails));
+    }
+
+    try {
+      await fetch("/api/company", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(companyDetails),
+      });
+    } catch (err) {
+      console.error("Failed to update company in DB", err);
+    }
     
-    setTimeout(() => {
-      setIsSaving(false);
-      setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 3500);
-      window.dispatchEvent(new Event("storage"));
-    }, 500);
+    setIsSaving(false);
+    setShowSuccessToast(true);
+    setTimeout(() => setShowSuccessToast(false), 3500);
+    window.dispatchEvent(new Event("storage"));
   };
 
   if (!isClient) return <div className="dashboard-content-inner">Memuat pengaturan...</div>;

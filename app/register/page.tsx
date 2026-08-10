@@ -113,55 +113,7 @@ export default function RegisterPage() {
     setTouched((prev) => ({ ...prev, [field]: true }));
   };
 
-  const handleSuccessfulRegister = () => {
-    setIsSubmitting(true);
-    setGeneralError("");
-
-    try {
-      if (typeof window !== "undefined") {
-        const userObj = {
-          username: username || "krisna_adi",
-          email: email || "krisna@company.com",
-          registeredAt: new Date().toISOString(),
-        };
-        localStorage.setItem("invoicein_user", JSON.stringify(userObj));
-
-        // Initialize default company details for dashboard if not existing
-        if (!localStorage.getItem("companyDetails")) {
-          const defaultCompany = {
-            companyName: username ? `${username} Enterprise` : "Infinity Go Indonesia",
-            industry: "Tour & Travel / Hospitality",
-            companyAddress: "Jakarta, Indonesia",
-            taxId: "",
-            phone: "+62 812-3456-7890",
-            email: email || "billing@infinitygo.id",
-            bankName: "Bank Central Asia (BCA)",
-            accountNumber: "8820-1928-3921",
-            accountHolder: username || "Infinity Go Indonesia",
-            referralSource: "Google Search / Web",
-            primaryGoal: "Pembuatan & Pengiriman Invoice",
-            monthlyVolume: "10 - 50 invoice / bulan",
-            logoBase64: "",
-            themeColor: "#2563eb",
-            defaultNotes: "Terima kasih atas kerja sama Anda. Pembayaran jatuh tempo dalam 14 hari."
-          };
-          localStorage.setItem("companyDetails", JSON.stringify(defaultCompany));
-        }
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-
-    setTimeout(() => {
-      setIsExiting(true);
-    }, 400);
-
-    setTimeout(() => {
-      router.push("/register/onboarding");
-    }, 850);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Mark all as touched
@@ -171,29 +123,66 @@ export default function RegisterPage() {
       password: true,
       confirmPassword: true,
     });
+    setGeneralError("");
 
     // Check all requirements
-    if (!username.trim() || !usernameRegex.test(username)) {
-      setGeneralError("Mohon masukkan username yang valid (min. 3 karakter).");
+    if (!username.trim()) {
+      setGeneralError("Mohon lengkapi nama pengguna Anda.");
       return;
     }
 
     if (!email.trim() || !emailRegex.test(email.trim())) {
-      setGeneralError("Mohon masukkan alamat email yang valid.");
+      setGeneralError("Mohon masukkan format email bisnis yang valid.");
       return;
     }
 
-    if (password.length < 8) {
-      setGeneralError("Kata sandi minimal 8 karakter.");
+    if (!password || password.length < 8) {
+      setGeneralError("Kata sandi minimal harus 8 karakter.");
       return;
     }
 
     if (password !== confirmPassword) {
-      setGeneralError("Konfirmasi kata sandi tidak cocok dengan kata sandi.");
+      setGeneralError("Kata sandi dan konfirmasi kata sandi tidak cocok.");
       return;
     }
 
-    handleSuccessfulRegister();
+    setIsSubmitting(true);
+
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: username.trim(),
+          email: email.trim(),
+          password,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setIsSubmitting(false);
+        setGeneralError(data.message || "Pendaftaran gagal. Silakan coba lagi.");
+        return;
+      }
+
+      if (typeof window !== "undefined") {
+        if (data.user) localStorage.setItem("invoicein_user", JSON.stringify(data.user));
+        if (data.company) localStorage.setItem("companyDetails", JSON.stringify(data.company));
+      }
+
+      // Smooth exit animation
+      setIsExiting(true);
+      setTimeout(() => {
+        router.push("/register/onboarding");
+        router.refresh();
+      }, 500);
+    } catch (err) {
+      console.error("Register network error", err);
+      setIsSubmitting(false);
+      setGeneralError("Terjadi gangguan koneksi internet. Silakan coba lagi.");
+    }
   };
 
   return (
@@ -597,7 +586,7 @@ export default function RegisterPage() {
             <button
               type="button"
               className="btn-social"
-              onClick={handleSuccessfulRegister}
+              onClick={() => setGeneralError("Fitur Daftar dengan Google akan segera tersedia.")}
               title="Daftar dengan Google"
             >
               <svg width="18" height="18" viewBox="0 0 24 24">
@@ -625,7 +614,7 @@ export default function RegisterPage() {
             <button
               type="button"
               className="btn-social"
-              onClick={handleSuccessfulRegister}
+              onClick={() => setGeneralError("Fitur Daftar dengan WhatsApp akan segera tersedia.")}
               title="Daftar dengan WhatsApp"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="#25D366">
@@ -639,7 +628,7 @@ export default function RegisterPage() {
             <button
               type="button"
               className="btn-social"
-              onClick={handleSuccessfulRegister}
+              onClick={() => setGeneralError("Fitur Daftar dengan Apple ID akan segera tersedia.")}
               title="Daftar dengan Apple"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="#0f172a">
