@@ -17,16 +17,21 @@ export default function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  // Check if there is URL error (e.g. from redirect)
+  // Check if there is URL error or success message
   useEffect(() => {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
       const urlErr = urlParams.get("error");
+      const urlSuccess = urlParams.get("success");
       if (urlErr) {
         setErrorMessage(decodeURIComponent(urlErr));
+      }
+      if (urlSuccess) {
+        setSuccessMessage(decodeURIComponent(urlSuccess));
       }
     }
   }, []);
@@ -184,6 +189,28 @@ export default function LoginPage() {
           <div className="auth-divider" style={{ margin: "0 0 20px 0" }}>
             <span>atau masuk dengan email</span>
           </div>
+
+          {successMessage && (
+            <div
+              style={{
+                padding: "10px 14px",
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                borderRadius: "8px",
+                color: "#16a34a",
+                fontSize: "13px",
+                marginBottom: "16px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>{successMessage}</span>
+            </div>
+          )}
 
           {errorMessage && (
             <div

@@ -28,6 +28,7 @@ export default function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [generalError, setGeneralError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   // Check if there is URL error (e.g. from Google OAuth)
   useEffect(() => {
@@ -183,12 +184,16 @@ export default function RegisterPage() {
         if (data.company) localStorage.setItem("companyDetails", JSON.stringify(data.company));
       }
 
-      // Smooth exit animation
-      setIsExiting(true);
+      setSuccessMessage("Pendaftaran berhasil! Mengalihkan ke pengaturan profil usaha...");
+
+      // Immediate clean redirect to onboarding
       setTimeout(() => {
-        router.push("/register/onboarding");
-        router.refresh();
-      }, 500);
+        setIsExiting(true);
+      }, 400);
+
+      setTimeout(() => {
+        window.location.href = "/register/onboarding";
+      }, 800);
     } catch (err) {
       console.error("Register network error", err);
       setIsSubmitting(false);
@@ -273,6 +278,28 @@ export default function RegisterPage() {
           <div className="auth-divider" style={{ margin: "0 0 20px 0" }}>
             <span>atau daftar dengan email</span>
           </div>
+
+          {successMessage && (
+            <div
+              style={{
+                padding: "10px 14px",
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                borderRadius: "8px",
+                color: "#16a34a",
+                fontSize: "13px",
+                marginBottom: "16px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>{successMessage}</span>
+            </div>
+          )}
 
           {generalError && (
             <div
