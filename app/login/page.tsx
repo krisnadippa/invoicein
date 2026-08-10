@@ -20,7 +20,7 @@ export default function LoginPage() {
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  // Check if there is URL error (e.g. from Google OAuth) or previously registered user
+  // Check if there is URL error (e.g. from redirect)
   useEffect(() => {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
@@ -28,18 +28,6 @@ export default function LoginPage() {
       if (urlErr) {
         setErrorMessage(decodeURIComponent(urlErr));
       }
-    }
-
-    try {
-      const saved = localStorage.getItem("invoicein_user");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.email) {
-          setEmail(parsed.email);
-        }
-      }
-    } catch {
-      // Ignore
     }
   }, []);
 

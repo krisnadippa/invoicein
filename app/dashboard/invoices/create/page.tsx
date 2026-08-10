@@ -30,7 +30,7 @@ export default function CreateInvoice() {
   const [invoiceDate, setInvoiceDate] = useState("2026-08-09");
   const [dueDate, setDueDate] = useState("2026-08-23");
   const [paymentTerms, setPaymentTerms] = useState("");
-  const [createdBy, setCreatedBy] = useState("Krisna Adi (Finance)");
+  const [createdBy, setCreatedBy] = useState("Finance Admin");
 
   // Client state
   const [clientName, setClientName] = useState("");
