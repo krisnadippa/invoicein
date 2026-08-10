@@ -107,8 +107,6 @@ export const metadata: Metadata = {
   },
 };
 
-import NeonAuthHandler from "./components/NeonAuthHandler";
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="id" className={inter.variable} suppressHydrationWarning>
@@ -125,7 +123,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="twitter:image" content="/images/logoin2.png" />
       </head>
       <body suppressHydrationWarning>
-        <NeonAuthHandler />
         {children}
       </body>
     </html>
