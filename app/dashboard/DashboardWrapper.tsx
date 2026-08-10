@@ -10,7 +10,7 @@ export default function DashboardWrapper({ children }: { children: React.ReactNo
   const [isDarkMode, setIsDarkMode] = useState(false);
   
   const [companyInfo, setCompanyInfo] = useState({
-    name: "Infinity Go Indonesia",
+    name: "Perusahaan Saya",
     logo: "",
     industry: "Tour & Travel / Hospitality",
     themeColor: "#2563eb"
@@ -19,8 +19,8 @@ export default function DashboardWrapper({ children }: { children: React.ReactNo
   const [userData, setUserData] = useState({
     name: "Admin",
     role: "Administrator",
-    company: "Infinity Go Indonesia",
-    avatarInitial: "I"
+    company: "Perusahaan Saya",
+    avatarInitial: "P"
   });
   
   useEffect(() => {

@@ -5,21 +5,13 @@ import { useState } from "react";
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-
-  const clients = [
-    { id: "CLT-001", name: "Budi Santoso", company: "PT Mitra Tour Mandiri", email: "budi@mitratour.co.id", phone: "+62 812-8899-1122", totalInvoiced: 64500000, invoicesCount: 4, status: "Active" },
-    { id: "CLT-002", name: "Siti Rahmawati", company: "PT Nusantara Travelindo", email: "finance@nusantaratravel.com", phone: "+62 813-4455-6677", totalInvoiced: 128000000, invoicesCount: 8, status: "VIP" },
-    { id: "CLT-003", name: "Wayan Artha", company: "CV Bali Cahaya Wisata", email: "wayan@balicahaya.id", phone: "+62 811-2233-4455", totalInvoiced: 48750000, invoicesCount: 3, status: "Active" },
-    { id: "CLT-004", name: "Hendra Wijaya", company: "PT Kreatif Digital Solusi", email: "hendra@kreatifdigital.com", phone: "+62 817-9900-1122", totalInvoiced: 85000000, invoicesCount: 5, status: "Active" },
-    { id: "CLT-005", name: "Eko Prasetyo", company: "PT Megah Graha Abadi", email: "eko@megahgraha.com", phone: "+62 821-3344-5566", totalInvoiced: 350000000, invoicesCount: 12, status: "VIP" },
-    { id: "CLT-006", name: "Dewi Lestari", company: "CV Samudera Biru", email: "dewi@samuderabiru.com", phone: "+62 819-0011-2233", totalInvoiced: 14200000, invoicesCount: 1, status: "Inactive" },
-  ];
+  const [clients, setClients] = useState<any[]>([]);
 
   const filteredClients = clients.filter(cl => {
-    const matchesSearch = cl.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          cl.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          cl.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "ALL" || cl.status.toUpperCase() === statusFilter.toUpperCase();
+    const matchesSearch = (cl.name || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (cl.company || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (cl.email || "").toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "ALL" || (cl.status || "").toUpperCase() === statusFilter.toUpperCase();
     return matchesSearch && matchesStatus;
   });
 

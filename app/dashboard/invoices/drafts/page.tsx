@@ -4,11 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 export default function InvoiceDraftsPage() {
-  const [drafts, setDrafts] = useState([
-    { id: "DFT-2026-001", client: "PT Samudera Harmoni", date: "07 Agu 2026", itemsCount: 3, amount: 8500000, status: "Draft" },
-    { id: "DFT-2026-002", client: "CV Nusa Indah Tour", date: "05 Agu 2026", itemsCount: 2, amount: 15400000, status: "Draft" },
-    { id: "DFT-2026-003", client: "PT Sentosa Mandiri", date: "01 Agu 2026", itemsCount: 5, amount: 32000000, status: "Draft" },
-  ]);
+  const [drafts, setDrafts] = useState<any[]>([]);
 
   const handleDelete = (id: string) => {
     setDrafts(drafts.filter(d => d.id !== id));

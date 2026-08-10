@@ -34,19 +34,8 @@ export default function ReportsPage() {
     }
   }, []);
 
-  // Comprehensive mock transaction dataset
-  const allTransactions: ReportItem[] = [
-    { id: "1", date: "2026-01-15", invoiceNo: "INV-2026-001", client: "PT Sentosa Abadi", invoiced: 45000000, collected: 45000000, expense: 12000000, status: "Paid" },
-    { id: "2", date: "2026-02-10", invoiceNo: "INV-2026-002", client: "CV Karya Prima", invoiced: 58000000, collected: 58000000, expense: 15500000, status: "Paid" },
-    { id: "3", date: "2026-03-05", invoiceNo: "INV-2026-003", client: "PT Nusantara Jaya", invoiced: 62500000, collected: 62500000, expense: 16000000, status: "Paid" },
-    { id: "4", date: "2026-04-18", invoiceNo: "INV-2026-004", client: "Bumi Tourism Corp", invoiced: 71000000, collected: 71000000, expense: 18200000, status: "Paid" },
-    { id: "5", date: "2026-05-22", invoiceNo: "INV-2026-005", client: "PT Mitra Sejahtera", invoiced: 84500000, collected: 84500000, expense: 21000000, status: "Paid" },
-    { id: "6", date: "2026-06-14", invoiceNo: "INV-2026-006", client: "PT Citra Mandiri", invoiced: 92000000, collected: 82000000, expense: 24000000, status: "Pending" },
-    { id: "7", date: "2026-07-08", invoiceNo: "INV-2026-007", client: "CV Sukses Bersama", invoiced: 78325000, collected: 65575000, expense: 10599767, status: "Pending" },
-    { id: "8", date: "2026-08-02", invoiceNo: "INV-2026-008", client: "PT Megah Internasional", invoiced: 35000000, collected: 35000000, expense: 8500000, status: "Paid" },
-    { id: "9", date: "2025-11-12", invoiceNo: "INV-2025-089", client: "PT Sumber Rejeki", invoiced: 40000000, collected: 40000000, expense: 9000000, status: "Paid" },
-    { id: "10", date: "2025-12-20", invoiceNo: "INV-2025-095", client: "Global Tech Asia", invoiced: 65000000, collected: 65000000, expense: 14000000, status: "Paid" }
-  ];
+  // Fresh transaction dataset
+  const allTransactions: ReportItem[] = [];
 
   // Preset Date Handlers
   const handlePreset = (preset: string) => {

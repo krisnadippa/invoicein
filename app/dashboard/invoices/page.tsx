@@ -1,26 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function InvoicesList() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [invoices, setInvoices] = useState<any[]>([]);
 
-  const invoices = [
-    { id: "INV-2026-001", client: "PT Mitra Tour Mandiri", date: "12 Okt 2026", due: "26 Okt 2026", amount: 18500000, status: "Paid" },
-    { id: "INV-2026-002", client: "PT Nusantara Travelindo", date: "15 Okt 2026", due: "29 Okt 2026", amount: 42000000, status: "Pending" },
-    { id: "INV-2026-003", client: "CV Bali Cahaya Wisata", date: "18 Okt 2026", due: "01 Nov 2026", amount: 12750000, status: "Overdue" },
-    { id: "INV-2026-004", client: "PT Kreatif Digital Solusi", date: "20 Okt 2026", due: "03 Nov 2026", amount: 35000000, status: "Pending" },
-    { id: "INV-2026-005", client: "PT Samudera Harmoni", date: "22 Okt 2026", due: "05 Nov 2026", amount: 8500000, status: "Draft" },
-    { id: "INV-2026-006", client: "PT Megah Graha Abadi", date: "25 Okt 2026", due: "08 Nov 2026", amount: 150000000, status: "Paid" },
-    { id: "INV-2026-007", client: "CV Maju Bersama Travel", date: "28 Okt 2026", due: "11 Nov 2026", amount: 24500000, status: "Paid" },
-  ];
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("invoicein_saved_invoices");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setInvoices(parsed);
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
 
   const filteredInvoices = invoices.filter(inv => {
-    const matchesSearch = inv.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          inv.client.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "ALL" || inv.status.toUpperCase() === statusFilter.toUpperCase();
+    const clientName = inv.client || inv.customer || "";
+    const matchesSearch = (inv.id || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          clientName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "ALL" || (inv.status || "").toUpperCase() === statusFilter.toUpperCase();
     return matchesSearch && matchesStatus;
   });
 
