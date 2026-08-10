@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import prisma, { withDbRetry } from "@/lib/prisma";
 import { verifyPassword, signAuthToken, AUTH_COOKIE_NAME } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
@@ -17,11 +17,13 @@ export async function POST(req: NextRequest) {
 
     const emailClean = email.trim().toLowerCase();
 
-    // 2. Find user in database with company
-    const user = await prisma.user.findUnique({
-      where: { email: emailClean },
-      include: { company: true },
-    });
+    // 2. Find user in database with company (with automatic retry on Neon cold-start)
+    const user = await withDbRetry(() =>
+      prisma.user.findUnique({
+        where: { email: emailClean },
+        include: { company: true },
+      })
+    );
 
     if (!user) {
       return NextResponse.json(

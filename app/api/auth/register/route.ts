@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import prisma, { withDbRetry } from "@/lib/prisma";
 import { hashPassword, signAuthToken, AUTH_COOKIE_NAME } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
@@ -8,9 +8,9 @@ export async function POST(req: NextRequest) {
     const { username, email, password } = body;
 
     // 1. Validation
-    if (!email || !password || !username) {
+    if (!username || !email || !password) {
       return NextResponse.json(
-        { success: false, message: "Nama pengguna, email, dan kata sandi wajib diisi." },
+        { success: false, message: "Semua kolom pendaftaran wajib diisi." },
         { status: 400 }
       );
     }
@@ -31,10 +31,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: emailClean },
-    });
+    // 2. Check if user already exists (with cold-start retry)
+    const existingUser = await withDbRetry(() =>
+      prisma.user.findUnique({
+        where: { email: emailClean },
+      })
+    );
 
     if (existingUser) {
       return NextResponse.json(
@@ -47,30 +49,32 @@ export async function POST(req: NextRequest) {
     const hashedPassword = await hashPassword(password);
 
     // 4. Create User and default Company profile in transaction
-    const newUser = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email: emailClean,
-          username: username.trim(),
-          password: hashedPassword,
-          role: "USER",
-        },
-      });
+    const newUser = await withDbRetry(() =>
+      prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            email: emailClean,
+            username: username.trim(),
+            password: hashedPassword,
+            role: "USER",
+          },
+        });
 
-      const company = await tx.company.create({
-        data: {
-          userId: user.id,
-          companyName: username.trim(),
-          email: emailClean,
-          bankName: "Bank Central Asia (BCA)",
-          accountHolder: username.trim(),
-          defaultNotes: "Terima kasih atas kerja samanya. Pembayaran mohon ditransfer ke rekening resmi di atas.",
-          themeColor: "#2563eb",
-        },
-      });
+        const company = await tx.company.create({
+          data: {
+            userId: user.id,
+            companyName: username.trim(),
+            email: emailClean,
+            bankName: "Bank Central Asia (BCA)",
+            accountHolder: username.trim(),
+            defaultNotes: "Terima kasih atas kerja samanya. Pembayaran mohon ditransfer ke rekening resmi di atas.",
+            themeColor: "#2563eb",
+          },
+        });
 
-      return { user, company };
-    });
+        return { user, company };
+      })
+    );
 
     // 5. Sign Auth Token
     const token = await signAuthToken({
