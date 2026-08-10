@@ -119,9 +119,8 @@ export default function LoginPage() {
       // Smooth exit animation and redirect
       setIsExiting(true);
       setTimeout(() => {
-        router.push("/dashboard");
-        router.refresh();
-      }, 500);
+        window.location.href = "/dashboard";
+      }, 400);
     } catch (err) {
       console.error("Login network error", err);
       setIsLoggingIn(false);

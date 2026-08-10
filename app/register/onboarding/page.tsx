@@ -239,9 +239,8 @@ export default function OnboardingPage() {
     }, 2600);
 
     setTimeout(() => {
-      router.push("/dashboard");
-      router.refresh();
-    }, 3100);
+      window.location.href = "/dashboard";
+    }, 2900);
   };
 
   // =========================================================
