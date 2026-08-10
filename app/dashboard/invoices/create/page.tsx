@@ -39,9 +39,9 @@ export default function CreateInvoice() {
   const [clientTaxId, setClientTaxId] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   
-  // Line items - Start clean with empty fields
+  // Line items - Start clean with quantity default to 1
   const [items, setItems] = useState<LineItem[]>([
-    { id: "1", description: "", quantity: "", price: "" }
+    { id: "1", description: "", quantity: 1, price: "" }
   ]);
 
   // Tax rate starts empty (tidak ditetapkan di awal)
@@ -103,7 +103,7 @@ export default function CreateInvoice() {
   const handleAddItem = () => {
     setItems(prev => [
       ...prev,
-      { id: Math.random().toString(36).substring(2, 9), description: "", quantity: "", price: "" }
+      { id: Math.random().toString(36).substring(2, 9), description: "", quantity: 1, price: "" }
     ]);
   };
 
@@ -280,7 +280,7 @@ export default function CreateInvoice() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Email Klien</label>
+                <label className="form-label">Email Klien (Opsional)</label>
                 <input 
                   type="email" 
                   className="form-input" 
@@ -293,7 +293,7 @@ export default function CreateInvoice() {
 
             <div className="form-grid-2">
               <div className="form-group">
-                <label className="form-label">Nomor Telepon</label>
+                <label className="form-label">Nomor Telepon (Opsional)</label>
                 <input 
                   type="text" 
                   className="form-input" 
@@ -316,7 +316,7 @@ export default function CreateInvoice() {
             </div>
 
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Alamat Penagihan</label>
+              <label className="form-label">Alamat Penagihan (Opsional)</label>
               <textarea 
                 className="form-textarea" 
                 rows={2} 
@@ -852,27 +852,6 @@ export default function CreateInvoice() {
             </div>
           </div>
 
-          {/* Signature & Authorization Section */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '24px', marginBottom: '20px', paddingTop: '16px', borderTop: '1px dashed #cbd5e1' }}>
-            <div>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', fontWeight: 600 }}>
-                Hormat Kami,
-              </div>
-              <div style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a' }}>
-                {companyDetails.companyName || "Infinity Go Indonesia"}
-              </div>
-            </div>
-
-            <div style={{ textAlign: 'center', minWidth: '200px' }}>
-              <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '45px', fontWeight: 500 }}>
-                Tanda Tangan & Cap Resmi:
-              </div>
-              <div style={{ borderBottom: '1.5px solid #64748b', width: '100%', marginBottom: '6px' }}></div>
-              <div style={{ fontWeight: 700, fontSize: '12px', color: '#0f172a' }}>
-                ( {companyDetails.companyName || "Otorisator Resmi"} )
-              </div>
-            </div>
-          </div>
 
           {/* Footer Notes */}
           {notes && (
