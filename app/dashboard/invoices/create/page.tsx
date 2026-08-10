@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 interface LineItem {
   id: string;
@@ -10,9 +11,39 @@ interface LineItem {
   price: number | string;
 }
 
-export default function CreateInvoice() {
+function CreateInvoiceForm() {
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("id");
+
   const [isClient, setIsClient] = useState(false);
   const [isSavedAlert, setIsSavedAlert] = useState(false);
+  const [savedClients, setSavedClients] = useState<any[]>([]);
+  const [invoiceStatus, setInvoiceStatus] = useState<"Menunggu" | "Lunas" | "Jatuh Tempo" | "DP">("Menunggu");
+  const [associatedExpenses, setAssociatedExpenses] = useState<any[]>([]);
+  const [includeExpensesInPrint, setIncludeExpensesInPrint] = useState(false);
+  
+  // Toast State
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+
+  const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Custom Confirm Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+    onCancel: () => {}
+  });
   
   // Company state loaded from LocalStorage
   const [companyDetails, setCompanyDetails] = useState({
@@ -56,9 +87,7 @@ export default function CreateInvoice() {
     setIsClient(true);
     const today = new Date();
     setInvoiceDate(today.toISOString().split('T')[0]);
-    const due = new Date();
-    due.setDate(due.getDate() + 14);
-    setDueDate(due.toISOString().split('T')[0]);
+    setDueDate(today.toISOString().split('T')[0]);
 
     const saved = localStorage.getItem("companyDetails");
     if (saved) {
@@ -98,7 +127,61 @@ export default function CreateInvoice() {
         console.error("Failed to parse user", e);
       }
     }
-  }, []);
+    const savedClientsData = localStorage.getItem("invoicein_saved_clients");
+    if (savedClientsData) {
+      try {
+        setSavedClients(JSON.parse(savedClientsData));
+      } catch (e) {}
+    }
+
+    if (!editId) {
+      try {
+        const savedInvoices = localStorage.getItem("invoicein_saved_invoices");
+        const list = savedInvoices ? JSON.parse(savedInvoices) : [];
+        if (list.length > 0) {
+          const numbers = list.map((inv: any) => {
+            const match = (inv.id || "").match(/INV-(\d+)/i);
+            return match ? parseInt(match[1], 10) : 0;
+          });
+          const maxNum = Math.max(...numbers, 0);
+          const nextNum = maxNum + 1;
+          setInvoiceNumber(`INV-${String(nextNum).padStart(3, '0')}`);
+        } else {
+          setInvoiceNumber("INV-001");
+        }
+      } catch (e) {}
+    }
+
+    if (editId) {
+      try {
+        const savedInvoices = localStorage.getItem("invoicein_saved_invoices");
+        if (savedInvoices) {
+          const list = JSON.parse(savedInvoices);
+          const found = list.find((inv: any) => inv.id === editId);
+          if (found) {
+            setInvoiceNumber(found.id);
+            setClientName(found.client);
+            setInvoiceDate(found.date);
+            setDueDate(found.due);
+            setItems(found.items || []);
+            setTaxRate(found.taxRate || "");
+            setDownPayment(found.downPayment || "");
+            setDpType(found.dpType || "nominal");
+            setNotes(found.notes || "");
+            setPaymentInstructions(found.paymentInstructions || "");
+            setInvoiceStatus(found.status || "Menunggu");
+          }
+        }
+
+        const savedExpenses = localStorage.getItem("invoicein_saved_expenses");
+        if (savedExpenses) {
+          const expList = JSON.parse(savedExpenses);
+          const filtered = expList.filter((exp: any) => exp.invoiceId === editId);
+          setAssociatedExpenses(filtered);
+        }
+      } catch (e) {}
+    }
+  }, [editId]);
 
   const handleAddItem = () => {
     setItems(prev => [
@@ -157,9 +240,96 @@ export default function CreateInvoice() {
     window.print();
   };
 
-  const handleSaveDraft = () => {
-    setIsSavedAlert(true);
-    setTimeout(() => setIsSavedAlert(false), 3000);
+  const proceedSaveInvoice = () => {
+    try {
+      const saved = localStorage.getItem("invoicein_saved_invoices");
+      const list = saved ? JSON.parse(saved) : [];
+
+      // Determine correct status: if there's a DP and it was "Menunggu", make it "DP"
+      let finalStatus = invoiceStatus;
+      if (Number(downPayment) > 0 && invoiceStatus === "Menunggu") {
+        finalStatus = "DP";
+      }
+
+      const newInvoice = {
+        id: invoiceNumber || `INV-${Date.now().toString().slice(-4)}`,
+        client: clientName,
+        customer: clientName,
+        date: invoiceDate,
+        due: dueDate,
+        amount: totalAmount,
+        total: formatCurrency(totalAmount),
+        status: finalStatus,
+        items: items,
+        taxRate: taxRate,
+        downPayment: downPayment,
+        dpType: dpType,
+        notes: notes,
+        paymentInstructions: paymentInstructions
+      };
+
+      const existingIndex = list.findIndex((inv: any) => inv.id === newInvoice.id);
+      if (existingIndex > -1) {
+        list[existingIndex] = newInvoice;
+      } else {
+        list.push(newInvoice);
+      }
+
+      localStorage.setItem("invoicein_saved_invoices", JSON.stringify(list));
+      showToast("Invoice berhasil disimpan!");
+      setTimeout(() => {
+        window.location.href = "/dashboard/invoices";
+      }, 1000);
+    } catch (e) {
+      showToast("Gagal menyimpan invoice!", "error");
+    }
+  };
+
+  const handleSaveInvoice = () => {
+    if (!clientName.trim()) {
+      showToast("Nama klien wajib diisi!", "error");
+      return;
+    }
+
+    try {
+      // Check if client is already saved, if not offer to save
+      const savedClientsData = localStorage.getItem("invoicein_saved_clients");
+      const clientList = savedClientsData ? JSON.parse(savedClientsData) : [];
+      const clientExists = clientList.some((c: any) => c.name.toLowerCase().trim() === clientName.toLowerCase().trim());
+
+      if (!clientExists) {
+        setConfirmModal({
+          isOpen: true,
+          title: "Simpan Klien Baru?",
+          message: `Klien "${clientName}" belum terdaftar di kontak. Apakah Anda ingin menyimpan informasi klien ini ke kontak Klien?`,
+          onConfirm: () => {
+            const newClient = {
+              id: `c-${Math.random().toString(36).substring(2, 9)}`,
+              name: clientName,
+              company: "-",
+              email: clientEmail || "-",
+              phone: clientPhone || "-",
+              address: clientAddress || "-",
+              status: "Active",
+              invoicesCount: 1,
+              totalInvoiced: remainingBalance || totalAmount
+            };
+            clientList.push(newClient);
+            localStorage.setItem("invoicein_saved_clients", JSON.stringify(clientList));
+            setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            proceedSaveInvoice();
+          },
+          onCancel: () => {
+            setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            proceedSaveInvoice();
+          }
+        });
+      } else {
+        proceedSaveInvoice();
+      }
+    } catch (e) {
+      proceedSaveInvoice();
+    }
   };
 
   if (!isClient) return <div className="dashboard-content-inner">Loading workspace...</div>;
@@ -268,6 +438,29 @@ export default function CreateInvoice() {
             </div>
 
             <div className="form-grid-2">
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label className="form-label" style={{ fontWeight: '600' }}>Pilih Klien Terdaftar (Opsional)</label>
+                <select 
+                  className="form-select"
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    const client = savedClients.find(c => c.id === selectedId);
+                    if (client) {
+                      setClientName(client.name);
+                      setClientEmail(client.email === "-" ? "" : client.email);
+                      setClientPhone(client.phone === "-" ? "" : client.phone);
+                      setClientAddress(client.address === "-" ? "" : client.address);
+                    }
+                  }}
+                  style={{ width: '100%', padding: '10px', fontSize: '13px' }}
+                >
+                  <option value="">-- Pilih Klien Terdaftar --</option>
+                  {savedClients.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.company})</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="form-group">
                 <label className="form-label">Nama Klien / Perusahaan *</label>
                 <input 
@@ -658,13 +851,44 @@ export default function CreateInvoice() {
               </div>
             </div>
 
+            {/* Status Selection */}
+            <div style={{ marginBottom: '16px' }}>
+              <label className="form-label" style={{ fontWeight: '600', display: 'block', marginBottom: '6px' }}>Status Pembayaran</label>
+              <select 
+                className="form-select"
+                value={invoiceStatus}
+                onChange={(e: any) => setInvoiceStatus(e.target.value)}
+                style={{ width: '100%', padding: '10px', fontSize: '13px' }}
+              >
+                <option value="Menunggu">Menunggu Pembayaran</option>
+                <option value="DP">Uang Muka (DP)</option>
+                <option value="Lunas">Lunas</option>
+                <option value="Jatuh Tempo">Jatuh Tempo</option>
+              </select>
+            </div>
+
+            {associatedExpenses.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', fontSize: '13px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                <input 
+                  type="checkbox" 
+                  id="includeExpenses" 
+                  checked={includeExpensesInPrint} 
+                  onChange={(e) => setIncludeExpensesInPrint(e.target.checked)}
+                  style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                />
+                <label htmlFor="includeExpenses" style={{ fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
+                  Cetak Rincian Pengeluaran (Internal)
+                </label>
+              </div>
+            )}
+
             {/* Primary Action Button */}
             <button 
               type="button" 
-              onClick={handlePrint}
+              onClick={handleSaveInvoice}
               style={{
                 width: '100%',
-                backgroundColor: companyDetails.themeColor,
+                backgroundColor: '#2563eb',
                 color: '#ffffff',
                 padding: '13px',
                 border: 'none',
@@ -675,30 +899,36 @@ export default function CreateInvoice() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '8px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
                 marginBottom: '10px',
                 transition: 'opacity 0.2s'
               }}
             >
-              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-              Cetak & Unduh PDF
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+              Simpan Invoice
             </button>
 
             <button 
               type="button" 
-              onClick={handleSaveDraft}
+              onClick={handlePrint}
               style={{
                 width: '100%',
                 background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                color: '#475569',
+                border: '1px solid #cbd5e1',
+                color: '#334155',
                 padding: '10px',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                marginBottom: '10px'
               }}
             >
-              Simpan sebagai Draf
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+              Cetak & Unduh PDF
             </button>
           </div>
         </div>
@@ -820,6 +1050,31 @@ export default function CreateInvoice() {
             </tbody>
           </table>
 
+          {/* Operational Expenses if any */}
+          {includeExpensesInPrint && associatedExpenses.length > 0 && (
+            <div style={{ marginTop: '24px', marginBottom: '24px' }}>
+              <h4 style={{ color: companyDetails.themeColor, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700, marginBottom: '8px' }}>
+                Operational Expenses (Pengeluaran Operasional)
+              </h4>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f8fafc', color: '#475569', borderBottom: `2px solid ${companyDetails.themeColor}` }}>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, fontSize: '11px' }}>Keterangan</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600, width: '30%', fontSize: '11px' }}>Biaya</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {associatedExpenses.map((exp, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                      <td style={{ padding: '8px 10px', textAlign: 'left', fontSize: '12px' }}>{exp.description}</td>
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '12px', color: '#dc2626' }}>-{formatCurrency(exp.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {/* Totals & DP Block */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '24px' }}>
             <div style={{ width: '45%' }}>
@@ -849,6 +1104,20 @@ export default function CreateInvoice() {
                   {formatCurrency(dpAmount > 0 ? remainingBalance : totalAmount)}
                 </span>
               </div>
+              {includeExpensesInPrint && associatedExpenses.length > 0 && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderBottom: '1px solid #f1f5f9', color: '#dc2626', fontSize: '12px' }}>
+                    <span style={{ fontWeight: 600 }}>Total Pengeluaran</span>
+                    <span style={{ fontWeight: 700 }}>- {formatCurrency(associatedExpenses.reduce((s, e) => s + e.amount, 0))}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 8px', backgroundColor: '#eff6ff', marginTop: '6px', borderTop: `2px solid #2563eb` }}>
+                    <span style={{ fontWeight: 700, fontSize: '13px' }}>Laba Bersih (Net Profit)</span>
+                    <span style={{ fontWeight: 800, fontSize: '15px', color: '#2563eb' }}>
+                      {formatCurrency((dpAmount > 0 ? remainingBalance : totalAmount) - associatedExpenses.reduce((s, e) => s + e.amount, 0))}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -864,6 +1133,158 @@ export default function CreateInvoice() {
         </div>
       </div>
 
+    {/* Floating Premium Toast Notification */}
+    {toast && (
+      <div style={{
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
+        backgroundColor: toast.type === 'success' ? '#10b981' : toast.type === 'error' ? '#ef4444' : '#2563eb',
+        color: '#ffffff',
+        padding: '12px 20px',
+        borderRadius: '8px',
+        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        zIndex: 99999,
+        animation: 'slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        fontWeight: 600,
+        fontSize: '13px',
+        border: '1px solid rgba(255, 255, 255, 0.15)'
+      }}>
+        {toast.type === 'success' ? (
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+        ) : toast.type === 'error' ? (
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+        ) : (
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        )}
+        {toast.message}
+        <style>{`
+          @keyframes slideIn {
+            0% { transform: translateY(30px) scale(0.95); opacity: 0; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+          }
+        `}</style>
+      </div>
+    )}
+
+    {/* Custom Confirmation Modal */}
+    {confirmModal.isOpen && (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'rgba(15, 23, 42, 0.4)',
+        backdropFilter: 'blur(8px)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 99999,
+        padding: '16px',
+        animation: 'fadeIn 0.25s ease forwards'
+      }}>
+        <div className="dash-card" style={{
+          width: '100%',
+          maxWidth: '440px',
+          padding: '28px',
+          borderRadius: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '20px',
+          background: 'var(--card-bg, #ffffff)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          border: '1px solid rgba(226, 232, 240, 0.8)',
+          animation: 'zoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          {/* Decorative Top Bar */}
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '4px', background: 'linear-gradient(to right, #3b82f6, #2563eb)' }}></div>
+          
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              backgroundColor: '#eff6ff',
+              color: '#3b82f6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: 'var(--foreground, #0f172a)', letterSpacing: '-0.3px' }}>{confirmModal.title}</h3>
+              <p style={{ fontSize: '13px', color: '#64748b', margin: 0, lineHeight: 1.6 }}>{confirmModal.message}</p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
+            <button 
+              type="button" 
+              onClick={confirmModal.onCancel}
+              style={{
+                border: '1px solid #cbd5e1',
+                background: '#ffffff',
+                color: '#475569',
+                padding: '10px 18px',
+                fontSize: '13px',
+                fontWeight: 600,
+                borderRadius: '8px',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              Simpan Tanpa Kontak
+            </button>
+            <button 
+              type="button" 
+              onClick={confirmModal.onConfirm}
+              style={{
+                padding: '10px 22px',
+                fontSize: '13px',
+                fontWeight: 700,
+                borderRadius: '8px',
+                backgroundColor: '#2563eb',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)'
+              }}
+            >
+              Ya, Simpan Kontak
+            </button>
+          </div>
+        </div>
+        
+        <style>{`
+          @keyframes fadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+          }
+          @keyframes zoomIn {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+          }
+        `}</style>
+      </div>
+    )}
+
     </div>
+  );
+}
+
+export default function CreateInvoice() {
+  return (
+    <Suspense fallback={<div className="dashboard-content-inner">Memuat Pembuat Invoice...</div>}>
+      <CreateInvoiceForm />
+    </Suspense>
   );
 }

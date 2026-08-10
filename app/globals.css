@@ -2810,6 +2810,16 @@ body.dark-mode .survey-choice-card:hover {
   background: #64748b;
 }
 
+/* Status DP (Down Payment) */
+.status-badge.status-dp {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+.status-badge.status-dp::before {
+  background: #0284c7;
+}
+
 /* Status VIP / Premium */
 .status-badge.status-vip {
   background: #f3e8ff;
@@ -2821,6 +2831,12 @@ body.dark-mode .survey-choice-card:hover {
 }
 
 /* Dark Mode Overrides for Status Badges */
+body.dark-mode .status-badge.status-dp {
+  background: rgba(3, 105, 161, 0.25);
+  color: #7dd3fc;
+  border-color: rgba(3, 105, 161, 0.5);
+}
+
 body.dark-mode .status-badge.status-paid,
 body.dark-mode .status-badge.status-active,
 body.dark-mode .status-badge.status-lunas {

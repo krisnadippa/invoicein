@@ -22,20 +22,72 @@ export default function ReportsPage() {
   const [endDate, setEndDate] = useState("2026-12-31");
   const [activePreset, setActivePreset] = useState("thisYear");
 
+  // Fresh transaction dataset state
+  const [allTransactions, setAllTransactions] = useState<ReportItem[]>([]);
+
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("companyDetails");
-      if (saved) {
-        const parsed = JSON.parse(saved);
+      const savedComp = localStorage.getItem("companyDetails");
+      if (savedComp) {
+        const parsed = JSON.parse(savedComp);
         if (parsed.companyName) setCompanyName(parsed.companyName);
       }
-    } catch {
-      // Ignore
+
+      // Load invoices and expenses to build transactions
+      const savedInvoices = localStorage.getItem("invoicein_saved_invoices");
+      const savedExpenses = localStorage.getItem("invoicein_saved_expenses");
+      
+      const invoicesList = savedInvoices ? JSON.parse(savedInvoices) : [];
+      const expensesList = savedExpenses ? JSON.parse(savedExpenses) : [];
+
+      const transactions: ReportItem[] = invoicesList.map((inv: any) => {
+        // Calculate total amount
+        const subtotal = (inv.items || []).reduce((sum: number, item: any) => {
+          const qty = Number(item.quantity) || 0;
+          const prc = Number(String(item.price || "0").replace(/[^0-9]/g, "")) || 0;
+          return sum + (qty * prc);
+        }, 0);
+        const taxPercent = Number(inv.taxRate) || 0;
+        const taxAmount = (subtotal * taxPercent) / 100;
+        const totalAmount = subtotal + taxAmount;
+
+        // DP amount
+        const rawDp = Number(inv.downPayment) || 0;
+        const dpAmount = inv.dpType === "percent" 
+          ? (totalAmount * Math.min(100, Math.max(0, rawDp))) / 100 
+          : Math.min(totalAmount, Math.max(0, rawDp));
+
+        // Collected amount
+        let collected = 0;
+        if (inv.status === "Lunas" || inv.status === "Paid") {
+          collected = totalAmount;
+        } else {
+          collected = dpAmount; // Downpayment is paid, rest is pending
+        }
+
+        // Expenses sum
+        const associatedExp = expensesList.filter((e: any) => e.invoiceId === inv.id);
+        const expenseTotal = associatedExp.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
+
+        return {
+          id: inv.id,
+          date: inv.date || new Date().toISOString().split('T')[0],
+          invoiceNo: inv.id,
+          client: inv.client || inv.customer || "Klien Umum",
+          invoiced: totalAmount,
+          collected: collected,
+          expense: expenseTotal,
+          status: inv.status === "Lunas" || inv.status === "Paid" 
+            ? "Paid" 
+            : (inv.status === "Jatuh Tempo" || inv.status === "Overdue" ? "Overdue" : "Pending")
+        };
+      });
+
+      setAllTransactions(transactions);
+    } catch (e) {
+      console.error(e);
     }
   }, []);
-
-  // Fresh transaction dataset
-  const allTransactions: ReportItem[] = [];
 
   // Preset Date Handlers
   const handlePreset = (preset: string) => {
@@ -353,7 +405,7 @@ export default function ReportsPage() {
       </div>
 
       {/* HIDDEN PRINT-ONLY FINANCIAL RECAP A4 TEMPLATE */}
-      <div className="screen-hidden">
+      <div className="screen-hidden invoice-print-container">
         <div style={{ padding: '30px', fontFamily: 'Arial, sans-serif', color: '#0f172a' }}>
           <div style={{ borderBottom: '2px solid #2563eb', paddingBottom: '16px', marginBottom: '20px' }}>
             <h1 style={{ fontSize: '20px', fontWeight: 800, margin: 0, color: '#2563eb' }}>{companyName}</h1>
@@ -410,6 +462,54 @@ export default function ReportsPage() {
           </table>
         </div>
       </div>
+
+      <style>{`
+        @media screen {
+          .screen-hidden {
+            display: none !important;
+          }
+        }
+        @media print {
+          /* Hide screen-only dashboard navigation, sidebars, headers, and filters */
+          .no-print, 
+          header, 
+          nav, 
+          aside, 
+          .sidebar, 
+          .dashboard-header,
+          button,
+          .reports-filter-card {
+            display: none !important;
+          }
+          
+          .screen-hidden {
+            display: block !important;
+          }
+          
+          /* Override wrapper layouts that cause clipping/blank pages on print */
+          html, 
+          body, 
+          .dashboard-layout, 
+          .dashboard-main, 
+          .dashboard-content-inner,
+          #root {
+            background: #ffffff !important;
+            color: #000000 !important;
+            height: auto !important;
+            min-height: auto !important;
+            overflow: visible !important;
+            position: static !important;
+            display: block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          
+          .dashboard-content-inner {
+            max-width: 100% !important;
+            width: 100% !important;
+          }
+        }
+      `}</style>
 
     </div>
   );

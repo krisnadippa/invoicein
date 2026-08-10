@@ -24,7 +24,7 @@ export default function Sidebar({
   themeColor: propThemeColor
 }: SidebarProps) {
   const pathname = usePathname();
-  const [invoiceMenuOpen, setInvoiceMenuOpen] = useState(pathname.includes('/invoices'));
+  const [invoiceMenuOpen, setInvoiceMenuOpen] = useState(true);
 
   // Local state that can read directly from localStorage to guarantee real-time sync with onboarding/settings
   const [brand, setBrand] = useState({
@@ -209,15 +209,18 @@ export default function Sidebar({
 
               {/* Submenu for Invoices */}
               {item.hasSubmenu && invoiceMenuOpen && !isCollapsed && (
-                <div className="sidebar-submenu">
-                  <Link href="/dashboard/invoices" className="sidebar-submenu-item" onClick={handleLinkClick}>
+                <div className="sidebar-submenu" style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '28px' }}>
+                  <Link href="/dashboard/invoices" className="sidebar-submenu-item" onClick={handleLinkClick} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" /></svg>
                     Semua Invoice
                   </Link>
-                  <Link href="/dashboard/invoices/create" className="sidebar-submenu-item" onClick={handleLinkClick}>
+                  <Link href="/dashboard/invoices/create" className="sidebar-submenu-item" onClick={handleLinkClick} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                     Buat Invoice Baru
                   </Link>
-                  <Link href="/dashboard/invoices/drafts" className="sidebar-submenu-item" onClick={handleLinkClick}>
-                    Draf Invoice
+                  <Link href="/dashboard/expenses" className="sidebar-submenu-item" onClick={handleLinkClick} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Pengeluaran (Expenses)
                   </Link>
                 </div>
               )}
