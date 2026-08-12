@@ -55,98 +55,76 @@ export default function ClientsPage() {
   const [newClientAddress, setNewClientAddress] = useState("");
   const [newClientStatus, setNewClientStatus] = useState<"Active" | "VIP" | "Inactive">("Active");
 
-  // Load clients from LocalStorage on mount
+  // Load clients from API on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("invoicein_saved_clients");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          setClients(parsed);
-          return;
-        }
-      }
-      
-      // Default initial mock clients if empty
-      const initialClients: Client[] = [
-        {
-          id: "c-1",
-          name: "Budi Santoso",
-          company: "PT Maju Bersama",
-          email: "budi@majubersama.com",
-          phone: "081234567890",
-          address: "Jl. Sudirman No. 12, Jakarta",
-          status: "VIP",
-          invoicesCount: 0,
-          totalInvoiced: 0
-        },
-        {
-          id: "c-2",
-          name: "Siti Rahma",
-          company: "CV Digital Karya",
-          email: "siti@digitalkarya.com",
-          phone: "089876543210",
-          address: "Jl. Gatot Subroto No. 45, Bandung",
-          status: "Active",
-          invoicesCount: 0,
-          totalInvoiced: 0
-        }
-      ];
-      localStorage.setItem("invoicein_saved_clients", JSON.stringify(initialClients));
-      setClients(initialClients);
-    } catch {
-      // Ignore
-    }
+    fetchClients();
   }, []);
 
-  // Update clients in localStorage whenever state changes
-  const saveClientsToStorage = (updatedList: Client[]) => {
-    setClients(updatedList);
-    localStorage.setItem("invoicein_saved_clients", JSON.stringify(updatedList));
+  const fetchClients = async () => {
+    try {
+      const res = await fetch("/api/clients");
+      const data = await res.json();
+      if (data.success) {
+        setClients(data.clients || []);
+      }
+    } catch (e) {
+      console.error("Fetch clients error", e);
+    }
   };
 
-  const handleAddClient = (e: React.FormEvent) => {
+  const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClientName.trim()) return;
 
-    let updated: Client[];
-
-    if (editingClientId) {
-      // Edit mode
-      updated = clients.map(c => {
-        if (c.id === editingClientId) {
-          return {
-            ...c,
+    try {
+      if (editingClientId) {
+        // Edit mode
+        const res = await fetch(`/api/clients/${editingClientId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             name: newClientName,
-            company: newClientCompany || "-",
-            email: newClientEmail || "-",
-            phone: newClientPhone || "-",
-            address: newClientAddress || "-",
+            company: newClientCompany,
+            email: newClientEmail,
+            phone: newClientPhone,
+            address: newClientAddress,
             status: newClientStatus
-          };
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Berhasil memperbarui data klien!");
+          fetchClients();
+        } else {
+          showToast(data.message || "Gagal memperbarui klien", "error");
         }
-        return c;
-      });
-      showToast("Berhasil memperbarui data klien!");
-      setEditingClientId(null);
-    } else {
-      // Create mode
-      const newClient: Client = {
-        id: `c-${Math.random().toString(36).substring(2, 9)}`,
-        name: newClientName,
-        company: newClientCompany || "-",
-        email: newClientEmail || "-",
-        phone: newClientPhone || "-",
-        address: newClientAddress || "-",
-        status: newClientStatus,
-        invoicesCount: 0,
-        totalInvoiced: 0
-      };
-      updated = [newClient, ...clients];
-      showToast("Berhasil menambahkan klien baru!");
+        setEditingClientId(null);
+      } else {
+        // Create mode
+        const res = await fetch("/api/clients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: newClientName,
+            company: newClientCompany,
+            email: newClientEmail,
+            phone: newClientPhone,
+            address: newClientAddress,
+            status: newClientStatus
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Berhasil menambahkan klien baru!");
+          fetchClients();
+        } else {
+          showToast(data.message || "Gagal menambahkan klien", "error");
+        }
+      }
+    } catch (err) {
+      console.error("Save Client Error", err);
+      showToast("Terjadi kesalahan saat menyimpan klien", "error");
     }
-
-    saveClientsToStorage(updated);
 
     // Reset Form
     setNewClientName("");
@@ -188,11 +166,23 @@ export default function ClientsPage() {
       confirmText: "Ya, Hapus",
       cancelText: "Batal",
       type: "danger",
-      onConfirm: () => {
-        const updated = clients.filter(c => c.id !== id);
-        saveClientsToStorage(updated);
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/clients/${id}`, {
+            method: "DELETE"
+          });
+          const data = await res.json();
+          if (data.success) {
+            fetchClients();
+            showToast("Klien berhasil dihapus!", "info");
+          } else {
+            showToast(data.message || "Gagal menghapus klien", "error");
+          }
+        } catch (err) {
+          console.error("Delete client error", err);
+          showToast("Gagal menghapus klien", "error");
+        }
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
-        showToast("Klien berhasil dihapus!", "info");
       },
       onCancel: () => {
         setConfirmModal(prev => ({ ...prev, isOpen: false }));

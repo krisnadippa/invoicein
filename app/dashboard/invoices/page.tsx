@@ -67,36 +67,48 @@ export default function InvoicesList() {
     });
   };
 
-  const handleConfirmSettlement = () => {
-    const updated = invoices.map(inv => {
-      if (inv.id === settlementModal.invoiceId) {
-        return { 
-          ...inv, 
+  const handleConfirmSettlement = async () => {
+    const inv = invoices.find(i => i.id === settlementModal.invoiceId);
+    const amount = inv ? (inv.amount || 0) : 0;
+    try {
+      const res = await fetch(`/api/invoices/${settlementModal.invoiceId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           status: "Lunas",
-          settlementDate: settlementModal.settlementDate
-        };
+          amountPaid: amount,
+          balanceDue: 0
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchInvoices();
+        showToast(`Invoice ${settlementModal.invoiceId} berhasil dilunasi pada tanggal ${settlementModal.settlementDate}!`);
+      } else {
+        showToast(data.message || "Gagal melunasi invoice", "error");
       }
-      return inv;
-    });
-    setInvoices(updated);
-    localStorage.setItem("invoicein_saved_invoices", JSON.stringify(updated));
+    } catch (err) {
+      console.error("Settlement error", err);
+      showToast("Gagal melunasi invoice", "error");
+    }
     setSettlementModal(prev => ({ ...prev, isOpen: false }));
-    showToast(`Invoice ${settlementModal.invoiceId} berhasil dilunasi pada tanggal ${settlementModal.settlementDate}!`);
   };
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("invoicein_saved_invoices");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          setInvoices(parsed);
-        }
-      }
-    } catch {
-      // Ignore
-    }
+    fetchInvoices();
   }, []);
+
+  const fetchInvoices = async () => {
+    try {
+      const res = await fetch("/api/invoices");
+      const data = await res.json();
+      if (data.success) {
+        setInvoices(data.invoices || []);
+      }
+    } catch (e) {
+      console.error("Fetch invoices error", e);
+    }
+  };
 
   const handleDeleteInvoice = (id: string) => {
     setConfirmModal({
@@ -106,12 +118,23 @@ export default function InvoicesList() {
       confirmText: "Ya, Hapus",
       cancelText: "Batal",
       type: "danger",
-      onConfirm: () => {
-        const updated = invoices.filter(inv => inv.id !== id);
-        setInvoices(updated);
-        localStorage.setItem("invoicein_saved_invoices", JSON.stringify(updated));
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/invoices/${id}`, {
+            method: "DELETE"
+          });
+          const data = await res.json();
+          if (data.success) {
+            fetchInvoices();
+            showToast("Invoice berhasil dihapus!", "info");
+          } else {
+            showToast(data.message || "Gagal menghapus invoice", "error");
+          }
+        } catch (err) {
+          console.error("Delete invoice error", err);
+          showToast("Gagal menghapus invoice", "error");
+        }
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
-        showToast("Invoice berhasil dihapus!", "info");
       },
       onCancel: () => {
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -119,16 +142,24 @@ export default function InvoicesList() {
     });
   };
 
-  const handleUpdateStatus = (id: string, newStatus: string) => {
-    const updated = invoices.map(inv => {
-      if (inv.id === id) {
-        return { ...inv, status: newStatus };
+  const handleUpdateStatus = async (id: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/invoices/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchInvoices();
+        showToast(`Status invoice berhasil diubah menjadi ${newStatus}!`);
+      } else {
+        showToast(data.message || "Gagal memperbarui status", "error");
       }
-      return inv;
-    });
-    setInvoices(updated);
-    localStorage.setItem("invoicein_saved_invoices", JSON.stringify(updated));
-    showToast(`Status invoice berhasil diubah menjadi ${newStatus}!`);
+    } catch (err) {
+      console.error("Update status error", err);
+      showToast("Gagal memperbarui status invoice", "error");
+    }
   };
 
   const filteredInvoices = invoices.filter(inv => {
@@ -236,10 +267,10 @@ export default function InvoicesList() {
                 filteredInvoices.map((invoice) => (
                   <tr key={invoice.id}>
                     <td style={{ fontWeight: 700, color: '#2563eb', padding: '12px' }}>
-                      {invoice.id}
+                      {invoice.invoiceNumber || invoice.id}
                     </td>
                     <td style={{ fontWeight: 600, color: 'var(--foreground, #0f172a)', padding: '12px' }}>
-                      {invoice.client}
+                      {invoice.clientName || invoice.customer || "-"}
                     </td>
                     <td style={{ color: '#64748b', fontSize: '13px', padding: '12px' }}>
                       {invoice.date}
@@ -247,8 +278,30 @@ export default function InvoicesList() {
                     <td style={{ color: '#64748b', fontSize: '13px', padding: '12px' }}>
                       {invoice.due}
                     </td>
-                    <td style={{ fontWeight: 700, textAlign: 'right', color: 'var(--foreground, #0f172a)', padding: '12px' }}>
-                      {formatRupiah(invoice.amount)}
+                    <td style={{ textAlign: 'right', color: 'var(--foreground, #0f172a)', padding: '12px' }}>
+                      <div style={{ fontWeight: 700 }}>{formatRupiah(invoice.amount)}</div>
+                      {invoice.status === 'DP' && (
+                        <div style={{ fontSize: '11px', color: '#0284c7', marginTop: '2px', lineHeight: 1.3 }}>
+                          DP: {formatRupiah(invoice.amountPaid)} <br/>
+                          Sisa: {formatRupiah(invoice.balanceDue)}
+                        </div>
+                      )}
+                      {(invoice.status === 'Menunggu' || invoice.status === 'Jatuh Tempo') && (invoice.amountPaid || 0) === 0 && (
+                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px', lineHeight: 1.3 }}>
+                          Belum Bayar: {formatRupiah(invoice.balanceDue || invoice.amount)}
+                        </div>
+                      )}
+                      {(invoice.status === 'Menunggu' || invoice.status === 'Jatuh Tempo') && (invoice.amountPaid || 0) > 0 && (
+                        <div style={{ fontSize: '11px', color: '#ca8a04', marginTop: '2px', lineHeight: 1.3 }}>
+                          Bayar: {formatRupiah(invoice.amountPaid)} <br/>
+                          Sisa: {formatRupiah(invoice.balanceDue)}
+                        </div>
+                      )}
+                      {invoice.status === 'Lunas' && (
+                        <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '2px', fontWeight: 600 }}>
+                          Lunas
+                        </div>
+                      )}
                     </td>
                     <td style={{ textAlign: 'center', padding: '12px' }}>
                       <select

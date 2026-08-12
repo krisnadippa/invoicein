@@ -89,97 +89,107 @@ function CreateInvoiceForm() {
     setInvoiceDate(today.toISOString().split('T')[0]);
     setDueDate(today.toISOString().split('T')[0]);
 
-    const saved = localStorage.getItem("companyDetails");
-    if (saved) {
-      try {
-        const details = JSON.parse(saved);
-        setCompanyDetails(prev => ({ ...prev, ...details }));
-        if (details.accountHolder) {
-          setCreatedBy(details.accountHolder);
-        }
-
-        // Sinkronisasi otomatis Catatan untuk Klien dari profil onboarding / settings
-        if (details.defaultNotes) {
-          setNotes(details.defaultNotes);
-        }
-
-        // Sinkronisasi otomatis Rekening Bank & Petunjuk Transfer dari data onboarding / settings
-        if (details.bankName || details.accountNumber || details.accountHolder) {
-          const bankLines: string[] = [];
-          if (details.bankName) bankLines.push(details.bankName);
-          if (details.accountNumber) bankLines.push(`No. Rekening: ${details.accountNumber}`);
-          if (details.accountHolder || details.companyName) bankLines.push(`a/n ${details.accountHolder || details.companyName}`);
-          setPaymentInstructions(bankLines.join("\n"));
-        }
-      } catch (e) {
-        console.error("Failed to parse company details", e);
-      }
-    }
-
-    const savedUser = localStorage.getItem("invoicein_user");
-    if (savedUser) {
-      try {
-        const user = JSON.parse(savedUser);
-        if (user.username) {
-          setCreatedBy(user.username);
-        }
-      } catch (e) {
-        console.error("Failed to parse user", e);
-      }
-    }
-    const savedClientsData = localStorage.getItem("invoicein_saved_clients");
-    if (savedClientsData) {
-      try {
-        setSavedClients(JSON.parse(savedClientsData));
-      } catch (e) {}
-    }
-
-    if (!editId) {
-      try {
-        const savedInvoices = localStorage.getItem("invoicein_saved_invoices");
-        const list = savedInvoices ? JSON.parse(savedInvoices) : [];
-        if (list.length > 0) {
-          const numbers = list.map((inv: any) => {
-            const match = (inv.id || "").match(/INV-(\d+)/i);
-            return match ? parseInt(match[1], 10) : 0;
-          });
-          const maxNum = Math.max(...numbers, 0);
-          const nextNum = maxNum + 1;
-          setInvoiceNumber(`INV-${String(nextNum).padStart(3, '0')}`);
-        } else {
-          setInvoiceNumber("INV-001");
-        }
-      } catch (e) {}
-    }
-
-    if (editId) {
-      try {
-        const savedInvoices = localStorage.getItem("invoicein_saved_invoices");
-        if (savedInvoices) {
-          const list = JSON.parse(savedInvoices);
-          const found = list.find((inv: any) => inv.id === editId);
-          if (found) {
-            setInvoiceNumber(found.id);
-            setClientName(found.client);
-            setInvoiceDate(found.date);
-            setDueDate(found.due);
-            setItems(found.items || []);
-            setTaxRate(found.taxRate || "");
-            setDownPayment(found.downPayment || "");
-            setDpType(found.dpType || "nominal");
-            setNotes(found.notes || "");
-            setPaymentInstructions(found.paymentInstructions || "");
-            setInvoiceStatus(found.status || "Menunggu");
+    // Fetch Company details
+    fetch("/api/company")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.company) {
+          const details = data.company;
+          setCompanyDetails(prev => ({ ...prev, ...details }));
+          if (details.accountHolder) {
+            setCreatedBy(details.accountHolder);
+          }
+          if (details.defaultNotes) {
+            setNotes(details.defaultNotes);
+          }
+          if (details.bankName || details.accountNumber || details.accountHolder) {
+            const bankLines: string[] = [];
+            if (details.bankName) bankLines.push(details.bankName);
+            if (details.accountNumber) bankLines.push(`No. Rekening: ${details.accountNumber}`);
+            if (details.accountHolder || details.companyName) bankLines.push(`a/n ${details.accountHolder || details.companyName}`);
+            setPaymentInstructions(bankLines.join("\n"));
           }
         }
+      })
+      .catch(err => console.error("Error loading company details", err));
 
-        const savedExpenses = localStorage.getItem("invoicein_saved_expenses");
-        if (savedExpenses) {
-          const expList = JSON.parse(savedExpenses);
-          const filtered = expList.filter((exp: any) => exp.invoiceId === editId);
-          setAssociatedExpenses(filtered);
+    // Fetch Clients list
+    fetch("/api/clients")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setSavedClients(data.clients || []);
         }
-      } catch (e) {}
+      })
+      .catch(err => console.error("Error loading clients", err));
+
+    // Handle edit mode or new invoice number
+    if (editId) {
+      fetch(`/api/invoices/${editId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.invoice) {
+            const found = data.invoice;
+            setInvoiceNumber(found.invoiceNumber || found.id);
+            const clientInfo = found.clientRef || {};
+            const cleanVal = (val: string | null | undefined) => {
+              if (!val || val === "-") return "";
+              return val;
+            };
+            setClientName(found.clientName);
+            setClientEmail(cleanVal(found.clientEmail) || cleanVal(clientInfo.email));
+            setClientPhone(cleanVal(found.clientPhone) || cleanVal(clientInfo.phone));
+            setClientTaxId(cleanVal(found.clientTaxId) || cleanVal(clientInfo.taxId));
+            setClientAddress(cleanVal(found.clientAddress) || cleanVal(clientInfo.address));
+            setInvoiceDate(found.issueDate.split('T')[0]);
+            setDueDate(found.dueDate.split('T')[0]);
+            setItems(found.items.map((it: any) => ({
+              id: it.id,
+              description: it.description,
+              quantity: it.quantity,
+              price: it.unitPrice,
+            })) || []);
+            setTaxRate(found.taxRate || "");
+            setDownPayment(found.downPayment || "");
+            setDpType(found.downPaymentType || "nominal");
+            setNotes(found.notes || "");
+            setPaymentInstructions(found.paymentInstructions || "");
+            setInvoiceStatus(found.status === "Paid" ? "Lunas" : found.status === "Pending" ? "Menunggu" : found.status === "Overdue" ? "Jatuh Tempo" : found.status === "Draft" ? "Draft" : found.status);
+          }
+        })
+        .catch(err => console.error("Error loading invoice detail", err));
+
+      // Fetch associated expenses if any
+      fetch("/api/expenses")
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            const filtered = (data.expenses || []).filter((exp: any) => exp.invoiceId === editId);
+            setAssociatedExpenses(filtered);
+          }
+        })
+        .catch(err => console.error("Error loading expenses", err));
+    } else {
+      // Generate next invoice number
+      fetch("/api/invoices")
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.invoices) {
+            const list = data.invoices;
+            if (list.length > 0) {
+               const numbers = list.map((inv: any) => {
+                 const match = (inv.invoiceNumber || "").match(/INV-(\d+)/i);
+                 return match ? parseInt(match[1], 10) : 0;
+               });
+               const maxNum = Math.max(...numbers, 0);
+               const nextNum = maxNum + 1;
+               setInvoiceNumber(`INV-${String(nextNum).padStart(3, '0')}`);
+            } else {
+              setInvoiceNumber("INV-001");
+            }
+          }
+        })
+        .catch(err => console.error("Error generating invoice number", err));
     }
   }, [editId]);
 
@@ -230,7 +240,8 @@ function CreateInvoiceForm() {
   const dpAmount = dpType === "percent" 
     ? (totalAmount * Math.min(100, Math.max(0, rawDp))) / 100 
     : Math.min(totalAmount, Math.max(0, rawDp));
-  const remainingBalance = Math.max(0, totalAmount - dpAmount);
+  const isLunas = invoiceStatus === "Lunas";
+  const remainingBalance = isLunas ? 0 : Math.max(0, totalAmount - dpAmount);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(amount);
@@ -240,82 +251,92 @@ function CreateInvoiceForm() {
     window.print();
   };
 
-  const proceedSaveInvoice = () => {
+  const proceedSaveInvoice = async () => {
     try {
-      const saved = localStorage.getItem("invoicein_saved_invoices");
-      const list = saved ? JSON.parse(saved) : [];
-
       // Determine correct status: if there's a DP and it was "Menunggu", make it "DP"
       let finalStatus = invoiceStatus;
       if (Number(downPayment) > 0 && invoiceStatus === "Menunggu") {
         finalStatus = "DP";
       }
 
-      const newInvoice = {
-        id: invoiceNumber || `INV-${Date.now().toString().slice(-4)}`,
-        client: clientName,
-        customer: clientName,
-        date: invoiceDate,
-        due: dueDate,
-        amount: totalAmount,
-        total: formatCurrency(totalAmount),
-        status: finalStatus,
-        items: items,
-        taxRate: taxRate,
-        downPayment: downPayment,
-        dpType: dpType,
-        notes: notes,
-        paymentInstructions: paymentInstructions
-      };
+      const res = await fetch("/api/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editId || undefined,
+          invoiceNumber,
+          clientName,
+          clientEmail,
+          clientPhone,
+          clientTaxId,
+          clientAddress,
+          issueDate: invoiceDate,
+          dueDate,
+          taxRate,
+          downPayment,
+          downPaymentType: dpType,
+          subtotal,
+          discount: 0, // Default to 0
+          totalAmount,
+          amountPaid: finalStatus === "Lunas" ? totalAmount : (finalStatus === "DP" ? dpAmount : 0),
+          balanceDue: remainingBalance,
+          status: finalStatus,
+          notes,
+          paymentInstructions,
+          createdBy,
+          items: items.map(item => ({
+            description: item.description,
+            quantity: item.quantity,
+            price: item.price
+          }))
+        })
+      });
 
-      const existingIndex = list.findIndex((inv: any) => inv.id === newInvoice.id);
-      if (existingIndex > -1) {
-        list[existingIndex] = newInvoice;
+      const data = await res.json();
+      if (data.success) {
+        showToast("Invoice berhasil disimpan!");
+        setTimeout(() => {
+          window.location.href = "/dashboard/invoices";
+        }, 1000);
       } else {
-        list.push(newInvoice);
+        showToast(data.message || "Gagal menyimpan invoice!", "error");
       }
-
-      localStorage.setItem("invoicein_saved_invoices", JSON.stringify(list));
-      showToast("Invoice berhasil disimpan!");
-      setTimeout(() => {
-        window.location.href = "/dashboard/invoices";
-      }, 1000);
     } catch (e) {
       showToast("Gagal menyimpan invoice!", "error");
     }
   };
 
-  const handleSaveInvoice = () => {
+  const handleSaveInvoice = async () => {
     if (!clientName.trim()) {
       showToast("Nama klien wajib diisi!", "error");
       return;
     }
 
     try {
-      // Check if client is already saved, if not offer to save
-      const savedClientsData = localStorage.getItem("invoicein_saved_clients");
-      const clientList = savedClientsData ? JSON.parse(savedClientsData) : [];
-      const clientExists = clientList.some((c: any) => c.name.toLowerCase().trim() === clientName.toLowerCase().trim());
+      const clientExists = savedClients.some((c: any) => c.name.toLowerCase().trim() === clientName.toLowerCase().trim());
 
       if (!clientExists) {
         setConfirmModal({
           isOpen: true,
           title: "Simpan Klien Baru?",
           message: `Klien "${clientName}" belum terdaftar di kontak. Apakah Anda ingin menyimpan informasi klien ini ke kontak Klien?`,
-          onConfirm: () => {
-            const newClient = {
-              id: `c-${Math.random().toString(36).substring(2, 9)}`,
-              name: clientName,
-              company: "-",
-              email: clientEmail || "-",
-              phone: clientPhone || "-",
-              address: clientAddress || "-",
-              status: "Active",
-              invoicesCount: 1,
-              totalInvoiced: remainingBalance || totalAmount
-            };
-            clientList.push(newClient);
-            localStorage.setItem("invoicein_saved_clients", JSON.stringify(clientList));
+          onConfirm: async () => {
+            try {
+              await fetch("/api/clients", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  name: clientName,
+                  company: "-",
+                  email: clientEmail || "-",
+                  phone: clientPhone || "-",
+                  address: clientAddress || "-",
+                  status: "Active"
+                })
+              });
+            } catch (err) {
+              console.error("Failed to quick save client", err);
+            }
             setConfirmModal(prev => ({ ...prev, isOpen: false }));
             proceedSaveInvoice();
           },
@@ -806,16 +827,16 @@ function CreateInvoiceForm() {
             </div>
 
             {/* Total / Sisa Pembayaran */}
-            <div className="summary-row total">
+            <div className="summary-row total" style={{ backgroundColor: isLunas ? '#f0fdf4' : undefined, borderColor: isLunas ? '#bbf7d0' : undefined }}>
               <div>
-                <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#64748b', fontWeight: 600 }}>
-                  {dpAmount > 0 ? "Sisa Pembayaran (Pelunasan)" : "Total Pembayaran"}
+                <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: isLunas ? '#16a34a' : '#64748b', fontWeight: 600 }}>
+                  {isLunas ? "Status Pembayaran" : (dpAmount > 0 ? "Sisa Pembayaran (Pelunasan)" : "Total Pembayaran")}
                 </div>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: companyDetails.themeColor, marginTop: '2px' }}>
-                  {formatCurrency(dpAmount > 0 ? remainingBalance : totalAmount)}
+                <div style={{ fontSize: '20px', fontWeight: 800, color: isLunas ? '#16a34a' : companyDetails.themeColor, marginTop: '2px' }}>
+                  {isLunas ? "LUNAS (Rp 0)" : formatCurrency(dpAmount > 0 ? remainingBalance : totalAmount)}
                 </div>
               </div>
-              <span style={{ fontSize: '12px', background: '#dbeafe', color: '#1e40af', padding: '4px 8px', fontWeight: 600 }}>IDR (Rp)</span>
+              <span style={{ fontSize: '12px', background: isLunas ? '#dcfce7' : '#dbeafe', color: isLunas ? '#16a34a' : '#1e40af', padding: '4px 8px', fontWeight: 600 }}>IDR (Rp)</span>
             </div>
 
             {/* Quick Branding Customizer */}
@@ -990,6 +1011,24 @@ function CreateInvoiceForm() {
               <div style={{ fontSize: '32px', fontWeight: 800, color: companyDetails.themeColor, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '8px' }}>
                 INVOICE
               </div>
+              {isLunas && (
+                <div style={{
+                  display: 'inline-block',
+                  border: '3px solid #16a34a',
+                  color: '#16a34a',
+                  textTransform: 'uppercase',
+                  fontSize: '12px',
+                  fontWeight: 900,
+                  padding: '3px 10px',
+                  borderRadius: '4px',
+                  transform: 'rotate(-5deg)',
+                  marginBottom: '12px',
+                  letterSpacing: '1px',
+                  boxShadow: '0 0 0 2px #ffffff'
+                }}>
+                  LUNAS / PAID
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '6px 16px', textAlign: 'right', justifyContent: 'end' }}>
                 <span style={{ color: '#64748b' }}>Invoice No:</span>
                 <span style={{ fontWeight: 600 }}>{invoiceNumber || "INV-001"}</span>
@@ -1098,10 +1137,16 @@ function CreateInvoiceForm() {
                   <span style={{ fontWeight: 700 }}>- {formatCurrency(dpAmount)}</span>
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 8px', backgroundColor: '#f8fafc', marginTop: '6px', borderTop: `2px solid ${companyDetails.themeColor}` }}>
-                <span style={{ fontWeight: 700, fontSize: '14px' }}>{dpAmount > 0 ? "Sisa Pelunasan" : "Total Due"}</span>
-                <span style={{ fontWeight: 800, fontSize: '16px', color: companyDetails.themeColor }}>
-                  {formatCurrency(dpAmount > 0 ? remainingBalance : totalAmount)}
+              {isLunas && dpAmount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', borderBottom: '1px solid #f1f5f9', color: '#16a34a' }}>
+                  <span style={{ fontWeight: 600 }}>Pelunasan Sisa</span>
+                  <span style={{ fontWeight: 700 }}>- {formatCurrency(totalAmount - dpAmount)}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 8px', backgroundColor: isLunas ? '#dcfce7' : '#f8fafc', marginTop: '6px', borderTop: `2px solid ${isLunas ? '#16a34a' : companyDetails.themeColor}` }}>
+                <span style={{ fontWeight: 700, fontSize: '14px', color: isLunas ? '#15803d' : '#0f172a' }}>{isLunas ? "STATUS:" : (dpAmount > 0 ? "Sisa Pelunasan" : "Total Due")}</span>
+                <span style={{ fontWeight: 800, fontSize: '16px', color: isLunas ? '#16a34a' : companyDetails.themeColor }}>
+                  {isLunas ? "LUNAS / PAID" : formatCurrency(dpAmount > 0 ? remainingBalance : totalAmount)}
                 </span>
               </div>
               {includeExpensesInPrint && associatedExpenses.length > 0 && (

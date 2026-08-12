@@ -63,69 +63,97 @@ function ExpensesContent() {
   // Modal control
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Load resources from localStorage
   useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    setDate(today);
+
+    fetchInvoices();
+    fetchExpenses();
+  }, []);
+
+  useEffect(() => {
+    if (queryInvoiceId && invoices.length > 0) {
+      setSelectedInvoiceId(queryInvoiceId);
+    }
+  }, [queryInvoiceId, invoices]);
+
+  const fetchInvoices = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      setDate(today);
-
-      const savedInvoices = localStorage.getItem("invoicein_saved_invoices");
-      if (savedInvoices) {
-        const parsedInvoices = JSON.parse(savedInvoices);
-        setInvoices(parsedInvoices);
-        
-        // Default select invoice
-        if (queryInvoiceId) {
-          setSelectedInvoiceId(queryInvoiceId);
-        }
+      const res = await fetch("/api/invoices");
+      const data = await res.json();
+      if (data.success) {
+        setInvoices(data.invoices || []);
       }
+    } catch (e) {
+      console.error("Fetch invoices error", e);
+    }
+  };
 
-      const savedExpenses = localStorage.getItem("invoicein_saved_expenses");
-      if (savedExpenses) {
-        setExpenses(JSON.parse(savedExpenses));
+  const fetchExpenses = async () => {
+    try {
+      const res = await fetch("/api/expenses");
+      const data = await res.json();
+      if (data.success) {
+        setExpenses(data.expenses || []);
       }
-    } catch (e) {}
-  }, [queryInvoiceId]);
+    } catch (e) {
+      console.error("Fetch expenses error", e);
+    }
+  };
 
   const selectedInvoice = invoices.find(inv => inv.id === selectedInvoiceId);
 
-  const handleSaveExpense = (e: React.FormEvent) => {
+  const handleSaveExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!description.trim() || !amount || !selectedInvoiceId) return;
 
     const numAmount = Number(amount.replace(/[^0-9]/g, "")) || 0;
 
-    let updatedExpenses: Expense[];
-    
-    if (editingExpenseId) {
-      // Edit mode
-      updatedExpenses = expenses.map(exp => {
-        if (exp.id === editingExpenseId) {
-          return {
-            ...exp,
+    try {
+      if (editingExpenseId) {
+        // Edit mode
+        const res = await fetch(`/api/expenses/${editingExpenseId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             description,
             amount: numAmount,
-            date: date || new Date().toISOString().split('T')[0]
-          };
+            date: date || new Date().toISOString().split('T')[0],
+            invoiceId: selectedInvoiceId
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Pengeluaran berhasil diperbarui!");
+          fetchExpenses();
+        } else {
+          showToast(data.message || "Gagal memperbarui pengeluaran", "error");
         }
-        return exp;
-      });
-      setEditingExpenseId(null);
-    } else {
-      // Create mode
-      const newExpense: Expense = {
-        id: `exp-${Math.random().toString(36).substring(2, 9)}`,
-        description,
-        amount: numAmount,
-        date: date || new Date().toISOString().split('T')[0],
-        invoiceId: selectedInvoiceId
-      };
-      updatedExpenses = [newExpense, ...expenses];
+        setEditingExpenseId(null);
+      } else {
+        // Create mode
+        const res = await fetch("/api/expenses", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            description,
+            amount: numAmount,
+            date: date || new Date().toISOString().split('T')[0],
+            invoiceId: selectedInvoiceId
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Pengeluaran berhasil disimpan!");
+          fetchExpenses();
+        } else {
+          showToast(data.message || "Gagal menyimpan pengeluaran", "error");
+        }
+      }
+    } catch (err) {
+      console.error("Save expense error", err);
+      showToast("Terjadi kesalahan saat menyimpan pengeluaran", "error");
     }
-
-    setExpenses(updatedExpenses);
-    localStorage.setItem("invoicein_saved_expenses", JSON.stringify(updatedExpenses));
-    showToast(editingExpenseId ? "Pengeluaran berhasil diperbarui!" : "Pengeluaran berhasil disimpan!");
 
     // Reset fields
     setDescription("");
@@ -149,12 +177,23 @@ function ExpensesContent() {
       confirmText: "Ya, Hapus",
       cancelText: "Batal",
       type: "danger",
-      onConfirm: () => {
-        const updated = expenses.filter(exp => exp.id !== id);
-        setExpenses(updated);
-        localStorage.setItem("invoicein_saved_expenses", JSON.stringify(updated));
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/expenses/${id}`, {
+            method: "DELETE"
+          });
+          const data = await res.json();
+          if (data.success) {
+            fetchExpenses();
+            showToast("Pengeluaran berhasil dihapus!", "info");
+          } else {
+            showToast(data.message || "Gagal menghapus pengeluaran", "error");
+          }
+        } catch (err) {
+          console.error("Delete expense error", err);
+          showToast("Gagal menghapus pengeluaran", "error");
+        }
         setConfirmModal(prev => ({ ...prev, isOpen: false }));
-        showToast("Pengeluaran berhasil dihapus!", "info");
       },
       onCancel: () => {
         setConfirmModal(prev => ({ ...prev, isOpen: false }));

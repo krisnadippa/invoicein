@@ -34,14 +34,20 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setIsClient(true);
-    const saved = localStorage.getItem("companyDetails");
-    if (saved) {
-      try {
-        setCompanyDetails(prev => ({ ...prev, ...JSON.parse(saved) }));
-      } catch (e) {
-        console.error("Failed to parse company details", e);
-      }
-    }
+    fetch("/api/company")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.company) {
+          setCompanyDetails(prev => ({
+            ...prev,
+            ...data.company,
+            logoBase64: data.company.logoBase64 || "",
+          }));
+        }
+      })
+      .catch(err => {
+        console.error("Failed to load company details", err);
+      });
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -66,24 +72,22 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setIsSaving(true);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("companyDetails", JSON.stringify(companyDetails));
-    }
-
     try {
-      await fetch("/api/company", {
+      const res = await fetch("/api/company", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(companyDetails),
       });
+      const data = await res.json();
+      if (data.success) {
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 3500);
+      }
     } catch (err) {
       console.error("Failed to update company in DB", err);
+    } finally {
+      setIsSaving(false);
     }
-    
-    setIsSaving(false);
-    setShowSuccessToast(true);
-    setTimeout(() => setShowSuccessToast(false), 3500);
-    window.dispatchEvent(new Event("storage"));
   };
 
   if (!isClient) return <div className="dashboard-content-inner">Memuat pengaturan...</div>;

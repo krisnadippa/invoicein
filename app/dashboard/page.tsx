@@ -20,72 +20,111 @@ export default function DashboardOverview() {
   const [monthlyTarget, setMonthlyTarget] = useState(10000000);
   const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
   const [targetInput, setTargetInput] = useState("");
+  const [monthlyRevenueData, setMonthlyRevenueData] = useState<number[]>(new Array(12).fill(0));
+  const [monthlyExpenseData, setMonthlyExpenseData] = useState<number[]>(new Array(12).fill(0));
 
   // Load created invoices from localStorage or state if any
-  useEffect(() => {
+  const fetchDashboardData = async () => {
     try {
-      // Load Target
-      const savedTarget = localStorage.getItem("invoicein_revenue_target");
-      if (savedTarget) {
-        setMonthlyTarget(Number(savedTarget));
+      // 1. Fetch Company for monthly target
+      const companyRes = await fetch("/api/company");
+      const companyData = await companyRes.json();
+      if (companyData.success && companyData.company) {
+        setMonthlyTarget(companyData.company.revenueTarget || 10000000);
       }
 
-      // Load Expenses
-      const savedExpenses = localStorage.getItem("invoicein_saved_expenses");
+      // 2. Fetch Expenses
+      const expensesRes = await fetch("/api/expenses");
+      const expensesData = await expensesRes.json();
       let totalExp = 0;
-      if (savedExpenses) {
-        const parsedExp = JSON.parse(savedExpenses);
-        if (Array.isArray(parsedExp)) {
-          totalExp = parsedExp.reduce((sum, item) => sum + (item.amount || 0), 0);
-          setTotalExpenses(totalExp);
-        }
-      }
+      const mExp = new Array(12).fill(0);
+      const currentYear = new Date().getFullYear();
 
-      // Load Invoices
-      const saved = localStorage.getItem("invoicein_saved_invoices");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setInvoices(parsed);
-          setTotalInvoicesCount(parsed.length);
-          let rev = 0;
-          let pending = 0;
-          let paid = 0;
-          parsed.forEach((inv) => {
-            const totalAmount = inv.amount || parseInt((inv.total || "").replace(/[^0-9]/g, ""), 10) || 0;
-            
-            // Calculate DP amount if any
-            const rawDp = Number(inv.downPayment) || 0;
-            const dpAmount = inv.dpType === "percent" 
-              ? (totalAmount * Math.min(100, Math.max(0, rawDp))) / 100 
-              : Math.min(totalAmount, Math.max(0, rawDp));
-
-            if (inv.status === "Lunas" || inv.status === "Paid") {
-              rev += totalAmount;
-              paid += 1;
-            } else if (inv.status === "DP") {
-              rev += dpAmount; // DP paid is part of revenue
-              pending += 1;
-            } else {
-              rev += dpAmount; // DP paid is part of revenue
-              pending += 1;
+      if (expensesData.success && Array.isArray(expensesData.expenses)) {
+        totalExp = expensesData.expenses.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+        expensesData.expenses.forEach((item: any) => {
+          if (item.date) {
+            const expDate = new Date(item.date);
+            if (expDate.getFullYear() === currentYear) {
+              const month = expDate.getMonth();
+              mExp[month] += item.amount || 0;
             }
-          });
-          setTotalRevenue(rev);
-          setTotalPendingCount(pending);
-          setTotalPaidCount(paid);
-        }
+          }
+        });
       }
-    } catch {
-      // Ignore
+      setTotalExpenses(totalExp);
+      setMonthlyExpenseData(mExp);
+
+      // 3. Fetch Invoices
+      const invoicesRes = await fetch("/api/invoices");
+      const invoicesData = await invoicesRes.json();
+      if (invoicesData.success && Array.isArray(invoicesData.invoices)) {
+        const parsed = invoicesData.invoices;
+        setInvoices(parsed.slice(0, 5)); // Show latest 5 invoices
+        setTotalInvoicesCount(parsed.length);
+        let rev = 0;
+        let pending = 0;
+        let paid = 0;
+        const mRev = new Array(12).fill(0);
+
+        parsed.forEach((inv: any) => {
+          const totalAmount = inv.amount || 0;
+          const rawDp = Number(inv.downPayment) || 0;
+          const dpAmount = inv.dpType === "percent" 
+            ? (totalAmount * Math.min(100, Math.max(0, rawDp))) / 100 
+            : Math.min(totalAmount, Math.max(0, rawDp));
+
+          if (inv.status === "Lunas" || inv.status === "Paid") {
+            rev += totalAmount;
+            paid += 1;
+          } else {
+            rev += dpAmount; // DP paid is part of revenue
+            pending += 1;
+          }
+
+          // Aggregate by month for current year
+          if (inv.date) {
+            const invDate = new Date(inv.date);
+            if (invDate.getFullYear() === currentYear) {
+              const month = invDate.getMonth();
+              if (inv.status === "Lunas" || inv.status === "Paid") {
+                mRev[month] += totalAmount;
+              } else {
+                mRev[month] += dpAmount;
+              }
+            }
+          }
+        });
+        setTotalRevenue(rev);
+        setTotalPendingCount(pending);
+        setTotalPaidCount(paid);
+        setMonthlyRevenueData(mRev);
+      }
+    } catch (err) {
+      console.error("Error loading dashboard data", err);
     }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
 
-  const handleSaveTarget = (e: React.FormEvent) => {
+  const handleSaveTarget = async (e: React.FormEvent) => {
     e.preventDefault();
     const clean = Number(targetInput.replace(/[^0-9]/g, "")) || 0;
-    setMonthlyTarget(clean);
-    localStorage.setItem("invoicein_revenue_target", String(clean));
+    try {
+      const res = await fetch("/api/company", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revenueTarget: clean }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMonthlyTarget(clean);
+      }
+    } catch (err) {
+      console.error("Failed to save target", err);
+    }
     setIsTargetModalOpen(false);
   };
 
@@ -204,18 +243,24 @@ export default function DashboardOverview() {
           </div>
           
           <div className="mock-bar-chart">
-            <div className="bar-group"><div className="bar-col blue" style={{ height: '0px' }}></div><div className="bar-col red" style={{ height: '0px' }}></div></div>
-            <div className="bar-group"><div className="bar-col blue" style={{ height: '0px' }}></div><div className="bar-col red" style={{ height: '0px' }}></div></div>
-            <div className="bar-group"><div className="bar-col blue" style={{ height: '0px' }}></div><div className="bar-col red" style={{ height: '0px' }}></div></div>
-            <div className="bar-group"><div className="bar-col blue" style={{ height: '0px' }}></div><div className="bar-col red" style={{ height: '0px' }}></div></div>
-            <div className="bar-group"><div className="bar-col blue" style={{ height: '0px' }}></div><div className="bar-col red" style={{ height: '0px' }}></div></div>
-            <div className="bar-group"><div className="bar-col blue" style={{ height: '0px' }}></div><div className="bar-col red" style={{ height: '0px' }}></div></div>
-            <div className="bar-group"><div className="bar-col blue" style={{ height: '0px' }}></div><div className="bar-col red" style={{ height: '0px' }}></div></div>
-            <div className="bar-group"><div className="bar-col blue" style={{ height: '0px' }}></div><div className="bar-col red" style={{ height: '0px' }}></div></div>
-            <div className="bar-group"><div className="bar-col blue" style={{ height: '0px' }}></div><div className="bar-col red" style={{ height: '0px' }}></div></div>
-            <div className="bar-group"><div className="bar-col blue" style={{ height: '0px' }}></div><div className="bar-col red" style={{ height: '0px' }}></div></div>
-            <div className="bar-group"><div className="bar-col blue" style={{ height: '0px' }}></div><div className="bar-col red" style={{ height: '0px' }}></div></div>
-            <div className="bar-group"><div className="bar-col blue" style={{ height: '0px' }}></div><div className="bar-col red" style={{ height: '0px' }}></div></div>
+            {(() => {
+              const maxVal = Math.max(...monthlyRevenueData, ...monthlyExpenseData, 1000000);
+              return monthlyRevenueData.map((rev, i) => {
+                const revHeight = (rev / maxVal) * 160; // Max height 160px
+                const expHeight = (monthlyExpenseData[i] / maxVal) * 160;
+                return (
+                  <div 
+                    className="bar-group" 
+                    key={i} 
+                    title={`Bulan ke-${i+1}\nPendapatan: ${formatRupiah(rev)}\nPengeluaran: ${formatRupiah(monthlyExpenseData[i])}`}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div className="bar-col blue" style={{ height: `${Math.max(rev > 0 ? 3 : 0, revHeight)}px`, transition: 'height 0.4s ease-out' }}></div>
+                    <div className="bar-col red" style={{ height: `${Math.max(monthlyExpenseData[i] > 0 ? 3 : 0, expHeight)}px`, transition: 'height 0.4s ease-out' }}></div>
+                  </div>
+                );
+              });
+            })()}
           </div>
           <div className="x-axis">
             <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>Mei</span><span>Jun</span><span>Jul</span><span>Agu</span><span>Sep</span><span>Okt</span><span>Nov</span><span>Des</span>
@@ -241,12 +286,38 @@ export default function DashboardOverview() {
           </div>
           
           <div className="semi-circle-container">
-            <div className="semi-circle">
-              <div className="semi-circle-value">
-                {monthlyTarget > 0 ? Math.min(100, Math.round((totalRevenue / monthlyTarget) * 100)) : 0}%
-              </div>
-            </div>
-            <div className="target-label">Tercapai <b>{formatRupiah(totalRevenue)}</b> dari target {formatRupiah(monthlyTarget)}</div>
+            {(() => {
+              const pct = monthlyTarget > 0 ? Math.min(100, Math.round((totalRevenue / monthlyTarget) * 100)) : 0;
+              // semi-circle arc length is 251.3
+              const strokeOffset = 251.3 - (251.3 * pct) / 100;
+              return (
+                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <svg width="200" height="110" viewBox="0 0 200 110" style={{ transform: 'rotate(0deg)' }}>
+                    <path
+                      d="M 20 100 A 80 80 0 0 1 180 100"
+                      fill="none"
+                      stroke="#e2e8f0"
+                      strokeWidth="16"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M 20 100 A 80 80 0 0 1 180 100"
+                      fill="none"
+                      stroke="#2563eb"
+                      strokeWidth="16"
+                      strokeLinecap="round"
+                      strokeDasharray="251.3"
+                      strokeDashoffset={strokeOffset}
+                      style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1)' }}
+                    />
+                  </svg>
+                  <div style={{ position: 'absolute', bottom: '15px', fontSize: '28px', fontWeight: 800, color: 'var(--foreground, #0f172a)' }}>
+                    {pct}%
+                  </div>
+                </div>
+              );
+            })()}
+            <div className="target-label" style={{ marginTop: '4px' }}>Tercapai <b>{formatRupiah(totalRevenue)}</b> dari target {formatRupiah(monthlyTarget)}</div>
             
             <div className="target-stats-row">
               <div className="target-stat-item">

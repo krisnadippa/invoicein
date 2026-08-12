@@ -44,6 +44,7 @@ export async function PUT(req: NextRequest) {
       defaultNotes,
       logoBase64,
       themeColor,
+      revenueTarget,
     } = body;
 
     const updated = await prisma.company.upsert({
@@ -62,6 +63,7 @@ export async function PUT(req: NextRequest) {
         defaultNotes,
         logoBase64,
         themeColor,
+        revenueTarget: revenueTarget !== undefined ? Number(revenueTarget) : undefined,
       },
       create: {
         userId: session.userId,
@@ -78,6 +80,7 @@ export async function PUT(req: NextRequest) {
         defaultNotes,
         logoBase64,
         themeColor: themeColor || "#2563eb",
+        revenueTarget: revenueTarget !== undefined ? Number(revenueTarget) : undefined,
       },
     });
 

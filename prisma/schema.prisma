@@ -35,8 +35,10 @@ model Company {
   defaultNotes   String?   @db.Text
   logoBase64     String?   @db.Text
   themeColor     String    @default("#2563eb")
+  revenueTarget  Float     @default(10000000)
   invoices       Invoice[]
   clients        Client[]
+  expenses       Expense[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -54,6 +56,8 @@ model Client {
   invoices    Invoice[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  @@index([companyId])
 }
 
 model Invoice {
@@ -65,6 +69,8 @@ model Invoice {
   invoiceNumber       String
   clientName          String
   clientEmail         String?
+  clientPhone         String?
+  clientTaxId         String?
   clientAddress       String?       @db.Text
   issueDate           DateTime      @default(now())
   dueDate             DateTime
@@ -82,8 +88,12 @@ model Invoice {
   paymentInstructions String?       @db.Text
   createdBy           String?
   items               InvoiceItem[]
+  expenses            Expense[]
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
+
+  @@index([companyId])
+  @@index([clientId])
 }
 
 model InvoiceItem {
@@ -95,4 +105,22 @@ model InvoiceItem {
   unitPrice   Float    @default(0)
   amount      Float    @default(0)
   createdAt   DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  companyId   String
+  companyRef  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoiceId   String?
+  invoiceRef  Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  description String
+  amount      Float
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([invoiceId])
 }
