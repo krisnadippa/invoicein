@@ -24,69 +24,75 @@ export default function ReportsPage() {
 
   // Fresh transaction dataset state
   const [allTransactions, setAllTransactions] = useState<ReportItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const savedComp = localStorage.getItem("companyDetails");
-      if (savedComp) {
-        const parsed = JSON.parse(savedComp);
-        if (parsed.companyName) setCompanyName(parsed.companyName);
-      }
-
-      // Load invoices and expenses to build transactions
-      const savedInvoices = localStorage.getItem("invoicein_saved_invoices");
-      const savedExpenses = localStorage.getItem("invoicein_saved_expenses");
-      
-      const invoicesList = savedInvoices ? JSON.parse(savedInvoices) : [];
-      const expensesList = savedExpenses ? JSON.parse(savedExpenses) : [];
-
-      const transactions: ReportItem[] = invoicesList.map((inv: any) => {
-        // Calculate total amount
-        const subtotal = (inv.items || []).reduce((sum: number, item: any) => {
-          const qty = Number(item.quantity) || 0;
-          const prc = Number(String(item.price || "0").replace(/[^0-9]/g, "")) || 0;
-          return sum + (qty * prc);
-        }, 0);
-        const taxPercent = Number(inv.taxRate) || 0;
-        const taxAmount = (subtotal * taxPercent) / 100;
-        const totalAmount = subtotal + taxAmount;
-
-        // DP amount
-        const rawDp = Number(inv.downPayment) || 0;
-        const dpAmount = inv.dpType === "percent" 
-          ? (totalAmount * Math.min(100, Math.max(0, rawDp))) / 100 
-          : Math.min(totalAmount, Math.max(0, rawDp));
-
-        // Collected amount
-        let collected = 0;
-        if (inv.status === "Lunas" || inv.status === "Paid") {
-          collected = totalAmount;
-        } else {
-          collected = dpAmount; // Downpayment is paid, rest is pending
+    async function loadData() {
+      try {
+        const savedComp = localStorage.getItem("companyDetails");
+        if (savedComp) {
+          const parsed = JSON.parse(savedComp);
+          if (parsed.companyName) setCompanyName(parsed.companyName);
         }
 
-        // Expenses sum
-        const associatedExp = expensesList.filter((e: any) => e.invoiceId === inv.id);
-        const expenseTotal = associatedExp.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
+        // Fetch live database invoices and expenses
+        const [resInvoices, resExpenses] = await Promise.all([
+          fetch("/api/invoices"),
+          fetch("/api/expenses")
+        ]);
 
-        return {
-          id: inv.id,
-          date: inv.date || new Date().toISOString().split('T')[0],
-          invoiceNo: inv.id,
-          client: inv.client || inv.customer || "Klien Umum",
-          invoiced: totalAmount,
-          collected: collected,
-          expense: expenseTotal,
-          status: inv.status === "Lunas" || inv.status === "Paid" 
-            ? "Paid" 
-            : (inv.status === "Jatuh Tempo" || inv.status === "Overdue" ? "Overdue" : "Pending")
-        };
-      });
+        const dataInvoices = await resInvoices.json();
+        const dataExpenses = await resExpenses.json();
 
-      setAllTransactions(transactions);
-    } catch (e) {
-      console.error(e);
+        const invoicesList = dataInvoices.success ? dataInvoices.invoices : [];
+        const expensesList = dataExpenses.success ? dataExpenses.expenses : [];
+
+        const transactions: ReportItem[] = invoicesList.map((inv: any) => {
+          const totalAmount = Number(inv.amount) || 0;
+          
+          // DP amount
+          const rawDp = Number(inv.downPayment) || 0;
+          const dpAmount = inv.dpType === "percent" 
+            ? (totalAmount * Math.min(100, Math.max(0, rawDp))) / 100 
+            : Math.min(totalAmount, Math.max(0, rawDp));
+
+          // Collected amount
+          let collected = Number(inv.amountPaid) || 0;
+          if (collected === 0) {
+            if (inv.status === "Lunas" || inv.status === "Paid") {
+              collected = totalAmount;
+            } else {
+              collected = dpAmount; // Downpayment is paid, rest is pending
+            }
+          }
+
+          // Expenses sum
+          const associatedExp = expensesList.filter((e: any) => e.invoiceId === inv.id);
+          const expenseTotal = associatedExp.reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
+
+          return {
+            id: inv.id,
+            date: inv.date || new Date().toISOString().split('T')[0],
+            invoiceNo: inv.invoiceNumber || inv.id,
+            client: inv.customer || inv.clientName || "Klien Umum",
+            invoiced: totalAmount,
+            collected: collected,
+            expense: expenseTotal,
+            status: inv.status === "Lunas" || inv.status === "Paid" 
+              ? "Paid" 
+              : (inv.status === "Jatuh Tempo" || inv.status === "Overdue" ? "Overdue" : "Pending")
+          };
+        });
+
+        setAllTransactions(transactions);
+      } catch (e) {
+        console.error("Error loading reports data:", e);
+      } finally {
+        setIsLoading(false);
+      }
     }
+
+    loadData();
   }, []);
 
   // Preset Date Handlers
@@ -344,7 +350,18 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {filteredTransactions.length > 0 ? (
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: '48px 16px', color: '#64748b' }}>
+            <div className="spinner" style={{ border: '3px solid #f3f3f3', borderTop: '3px solid #2563eb', borderRadius: '50%', width: '30px', height: '30px', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }}></div>
+            <style>{`
+              @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+            `}</style>
+            <span>Memuat data laporan...</span>
+          </div>
+        ) : filteredTransactions.length > 0 ? (
           <div className="table-responsive-wrapper">
             <table className="invoice-table" style={{ width: '100%', minWidth: '750px' }}>
               <thead>
