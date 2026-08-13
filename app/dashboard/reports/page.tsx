@@ -17,10 +17,15 @@ export default function ReportsPage() {
   // Company details for printing/header
   const [companyName, setCompanyName] = useState("Infinity Go Indonesia");
 
-  // Date range state
-  const [startDate, setStartDate] = useState("2026-01-01");
-  const [endDate, setEndDate] = useState("2026-12-31");
-  const [activePreset, setActivePreset] = useState("thisYear");
+  // Date range state - defaults dynamically to 1 month ago until today
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    today.setMonth(today.getMonth() - 1);
+    return today.toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split("T")[0];
+  });
 
   // Fresh transaction dataset state
   const [allTransactions, setAllTransactions] = useState<ReportItem[]>([]);
@@ -94,37 +99,6 @@ export default function ReportsPage() {
 
     loadData();
   }, []);
-
-  // Preset Date Handlers
-  const handlePreset = (preset: string) => {
-    setActivePreset(preset);
-    const today = new Date();
-    const formatDate = (d: Date) => d.toISOString().split("T")[0];
-
-    if (preset === "last30") {
-      const past = new Date();
-      past.setDate(today.getDate() - 30);
-      setStartDate(formatDate(past));
-      setEndDate(formatDate(today));
-    } else if (preset === "thisMonth") {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      setStartDate(formatDate(start));
-      setEndDate(formatDate(end));
-    } else if (preset === "thisQuarter") {
-      const quarter = Math.floor(today.getMonth() / 3);
-      const start = new Date(today.getFullYear(), quarter * 3, 1);
-      const end = new Date(today.getFullYear(), (quarter + 1) * 3, 0);
-      setStartDate(formatDate(start));
-      setEndDate(formatDate(end));
-    } else if (preset === "thisYear") {
-      setStartDate("2026-01-01");
-      setEndDate("2026-12-31");
-    } else if (preset === "all") {
-      setStartDate("2024-01-01");
-      setEndDate("2027-12-31");
-    }
-  };
 
   // Filtered transactions based on date range
   const filteredTransactions = useMemo(() => {
@@ -219,7 +193,6 @@ export default function ReportsPage() {
                 value={startDate} 
                 onChange={(e) => {
                   setStartDate(e.target.value);
-                  setActivePreset("custom");
                 }} 
               />
             </div>
@@ -233,7 +206,6 @@ export default function ReportsPage() {
                 value={endDate} 
                 onChange={(e) => {
                   setEndDate(e.target.value);
-                  setActivePreset("custom");
                 }} 
               />
             </div>
@@ -265,46 +237,6 @@ export default function ReportsPage() {
               Cetak Rekap PDF
             </button>
           </div>
-        </div>
-
-        {/* Quick Date Presets Row */}
-        <div className="date-presets-row">
-          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, marginRight: '4px' }}>Pilihan Cepat:</span>
-          <button 
-            type="button" 
-            className={`date-preset-chip ${activePreset === "last30" ? "active" : ""}`}
-            onClick={() => handlePreset("last30")}
-          >
-            30 Hari Terakhir
-          </button>
-          <button 
-            type="button" 
-            className={`date-preset-chip ${activePreset === "thisMonth" ? "active" : ""}`}
-            onClick={() => handlePreset("thisMonth")}
-          >
-            Bulan Ini
-          </button>
-          <button 
-            type="button" 
-            className={`date-preset-chip ${activePreset === "thisQuarter" ? "active" : ""}`}
-            onClick={() => handlePreset("thisQuarter")}
-          >
-            Kuartal Ini
-          </button>
-          <button 
-            type="button" 
-            className={`date-preset-chip ${activePreset === "thisYear" ? "active" : ""}`}
-            onClick={() => handlePreset("thisYear")}
-          >
-            Tahun Ini (2026)
-          </button>
-          <button 
-            type="button" 
-            className={`date-preset-chip ${activePreset === "all" ? "active" : ""}`}
-            onClick={() => handlePreset("all")}
-          >
-            Semua Waktu
-          </button>
         </div>
       </div>
 
