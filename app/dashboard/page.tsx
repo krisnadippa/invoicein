@@ -23,89 +23,118 @@ export default function DashboardOverview() {
   const [monthlyRevenueData, setMonthlyRevenueData] = useState<number[]>(new Array(12).fill(0));
   const [monthlyExpenseData, setMonthlyExpenseData] = useState<number[]>(new Array(12).fill(0));
 
+  const processDashboardData = (companyData: any, expensesData: any, invoicesData: any) => {
+    // 1. Process Company monthly target
+    if (companyData && companyData.success && companyData.company) {
+      setMonthlyTarget(companyData.company.revenueTarget || 10000000);
+    }
+
+    // 2. Process Expenses
+    let totalExp = 0;
+    const mExp = new Array(12).fill(0);
+    const currentYear = new Date().getFullYear();
+
+    if (expensesData && expensesData.success && Array.isArray(expensesData.expenses)) {
+      totalExp = expensesData.expenses.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+      expensesData.expenses.forEach((item: any) => {
+        if (item.date) {
+          const expDate = new Date(item.date);
+          if (expDate.getFullYear() === currentYear) {
+            const month = expDate.getMonth();
+            mExp[month] += item.amount || 0;
+          }
+        }
+      });
+    }
+    setTotalExpenses(totalExp);
+    setMonthlyExpenseData(mExp);
+
+    // 3. Process Invoices
+    if (invoicesData && invoicesData.success && Array.isArray(invoicesData.invoices)) {
+      const parsed = invoicesData.invoices;
+      setInvoices(parsed.slice(0, 5)); // Show latest 5 invoices
+      setTotalInvoicesCount(parsed.length);
+      let rev = 0;
+      let pending = 0;
+      let paid = 0;
+      const mRev = new Array(12).fill(0);
+
+      parsed.forEach((inv: any) => {
+        const totalAmount = inv.amount || 0;
+        const rawDp = Number(inv.downPayment) || 0;
+        const dpAmount = inv.dpType === "percent" 
+          ? (totalAmount * Math.min(100, Math.max(0, rawDp))) / 100 
+          : Math.min(totalAmount, Math.max(0, rawDp));
+
+        if (inv.status === "Lunas" || inv.status === "Paid") {
+          rev += totalAmount;
+          paid += 1;
+        } else {
+          rev += dpAmount; // DP paid is part of revenue
+          pending += 1;
+        }
+
+        // Aggregate by month for current year
+        if (inv.date) {
+          const invDate = new Date(inv.date);
+          if (invDate.getFullYear() === currentYear) {
+            const month = invDate.getMonth();
+            if (inv.status === "Lunas" || inv.status === "Paid") {
+              mRev[month] += totalAmount;
+            } else {
+              mRev[month] += dpAmount;
+            }
+          }
+        }
+      });
+      setTotalRevenue(rev);
+      setTotalPendingCount(pending);
+      setTotalPaidCount(paid);
+      setMonthlyRevenueData(mRev);
+    }
+  };
+
   // Load created invoices from localStorage or state if any
   const fetchDashboardData = async () => {
     try {
-      // 1. Fetch Company for monthly target
-      const companyRes = await fetch("/api/company");
-      const companyData = await companyRes.json();
-      if (companyData.success && companyData.company) {
-        setMonthlyTarget(companyData.company.revenueTarget || 10000000);
-      }
+      // Fetch details in parallel to avoid waterfall network delays
+      const [companyRes, expensesRes, invoicesRes] = await Promise.all([
+        fetch("/api/company"),
+        fetch("/api/expenses"),
+        fetch("/api/invoices")
+      ]);
 
-      // 2. Fetch Expenses
-      const expensesRes = await fetch("/api/expenses");
-      const expensesData = await expensesRes.json();
-      let totalExp = 0;
-      const mExp = new Array(12).fill(0);
-      const currentYear = new Date().getFullYear();
+      const [companyData, expensesData, invoicesData] = await Promise.all([
+        companyRes.json(),
+        expensesRes.json(),
+        invoicesRes.json()
+      ]);
 
-      if (expensesData.success && Array.isArray(expensesData.expenses)) {
-        totalExp = expensesData.expenses.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-        expensesData.expenses.forEach((item: any) => {
-          if (item.date) {
-            const expDate = new Date(item.date);
-            if (expDate.getFullYear() === currentYear) {
-              const month = expDate.getMonth();
-              mExp[month] += item.amount || 0;
-            }
-          }
-        });
-      }
-      setTotalExpenses(totalExp);
-      setMonthlyExpenseData(mExp);
+      processDashboardData(companyData, expensesData, invoicesData);
 
-      // 3. Fetch Invoices
-      const invoicesRes = await fetch("/api/invoices");
-      const invoicesData = await invoicesRes.json();
-      if (invoicesData.success && Array.isArray(invoicesData.invoices)) {
-        const parsed = invoicesData.invoices;
-        setInvoices(parsed.slice(0, 5)); // Show latest 5 invoices
-        setTotalInvoicesCount(parsed.length);
-        let rev = 0;
-        let pending = 0;
-        let paid = 0;
-        const mRev = new Array(12).fill(0);
-
-        parsed.forEach((inv: any) => {
-          const totalAmount = inv.amount || 0;
-          const rawDp = Number(inv.downPayment) || 0;
-          const dpAmount = inv.dpType === "percent" 
-            ? (totalAmount * Math.min(100, Math.max(0, rawDp))) / 100 
-            : Math.min(totalAmount, Math.max(0, rawDp));
-
-          if (inv.status === "Lunas" || inv.status === "Paid") {
-            rev += totalAmount;
-            paid += 1;
-          } else {
-            rev += dpAmount; // DP paid is part of revenue
-            pending += 1;
-          }
-
-          // Aggregate by month for current year
-          if (inv.date) {
-            const invDate = new Date(inv.date);
-            if (invDate.getFullYear() === currentYear) {
-              const month = invDate.getMonth();
-              if (inv.status === "Lunas" || inv.status === "Paid") {
-                mRev[month] += totalAmount;
-              } else {
-                mRev[month] += dpAmount;
-              }
-            }
-          }
-        });
-        setTotalRevenue(rev);
-        setTotalPendingCount(pending);
-        setTotalPaidCount(paid);
-        setMonthlyRevenueData(mRev);
-      }
+      // Cache the response
+      localStorage.setItem("invoicein_cache_dashboard", JSON.stringify({
+        companyData,
+        expensesData,
+        invoicesData
+      }));
     } catch (err) {
       console.error("Error loading dashboard data", err);
     }
   };
 
   useEffect(() => {
+    // Try loading from localStorage cache first for instant rendering
+    try {
+      const cached = localStorage.getItem("invoicein_cache_dashboard");
+      if (cached) {
+        const { companyData, expensesData, invoicesData } = JSON.parse(cached);
+        processDashboardData(companyData, expensesData, invoicesData);
+      }
+    } catch (e) {
+      console.warn("Error loading cached dashboard data", e);
+    }
+
     fetchDashboardData();
   }, []);
 

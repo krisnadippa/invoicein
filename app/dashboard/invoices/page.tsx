@@ -17,6 +17,17 @@ export default function InvoicesList() {
   };
 
   // Custom Confirm Modal State
+  const [previewInvoice, setPreviewInvoice] = useState<any | null>(null);
+  const [companyDetails, setCompanyDetails] = useState<any>({
+    companyName: "Perusahaan Saya",
+    companyAddress: "",
+    taxId: "",
+    phone: "",
+    email: "",
+    logoBase64: "",
+    themeColor: "#2563eb"
+  });
+
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -94,21 +105,39 @@ export default function InvoicesList() {
     setSettlementModal(prev => ({ ...prev, isOpen: false }));
   };
 
-  useEffect(() => {
-    fetchInvoices();
-  }, []);
-
   const fetchInvoices = async () => {
     try {
       const res = await fetch("/api/invoices");
       const data = await res.json();
       if (data.success) {
-        setInvoices(data.invoices || []);
+        const list = data.invoices || [];
+        setInvoices(list);
+        localStorage.setItem("invoicein_cache_invoices", JSON.stringify(list));
       }
     } catch (e) {
       console.error("Fetch invoices error", e);
     }
   };
+
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem("invoicein_cache_invoices");
+      if (cached) {
+        setInvoices(JSON.parse(cached));
+      }
+    } catch (e) {
+      console.warn("Error loading cached invoices", e);
+    }
+    try {
+      const saved = localStorage.getItem("companyDetails");
+      if (saved) {
+        setCompanyDetails(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.warn("Failed to load company details", e);
+    }
+    fetchInvoices();
+  }, []);
 
   const handleDeleteInvoice = (id: string) => {
     setConfirmModal({
@@ -172,13 +201,22 @@ export default function InvoicesList() {
     if (statusFilter === "PAID") mappedFilter = "LUNAS";
     if (statusFilter === "PENDING") mappedFilter = "MENUNGGU";
     if (statusFilter === "OVERDUE") mappedFilter = "JATUH TEMPO";
+    if (statusFilter === "DP") mappedFilter = "DP";
 
     const matchesStatus = statusFilter === "ALL" || (inv.status || "").toUpperCase() === mappedFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const formatRupiah = (val: number) => {
-    return `Rp ${val.toLocaleString("id-ID")}`;
+  const formatCurrency = (val: number, currency: string = "IDR") => {
+    try {
+      return new Intl.NumberFormat(currency === "IDR" ? "id-ID" : "en-US", {
+        style: "currency",
+        currency: currency,
+        maximumFractionDigits: currency === "IDR" ? 0 : 2
+      }).format(val);
+    } catch (e) {
+      return `${currency === "IDR" ? "Rp" : currency} ${val.toLocaleString("id-ID")}`;
+    }
   };
 
   return (
@@ -241,6 +279,7 @@ export default function InvoicesList() {
             >
               <option value="ALL">Semua Status</option>
               <option value="PAID">Paid (Lunas)</option>
+              <option value="DP">DP (Uang Muka)</option>
               <option value="PENDING">Pending (Menunggu)</option>
               <option value="OVERDUE">Overdue (Terlambat)</option>
               <option value="DRAFT">Draft (Draf)</option>
@@ -279,22 +318,22 @@ export default function InvoicesList() {
                       {invoice.due}
                     </td>
                     <td style={{ textAlign: 'right', color: 'var(--foreground, #0f172a)', padding: '12px' }}>
-                      <div style={{ fontWeight: 700 }}>{formatRupiah(invoice.amount)}</div>
+                      <div style={{ fontWeight: 700 }}>{formatCurrency(invoice.amount, invoice.currency)}</div>
                       {invoice.status === 'DP' && (
                         <div style={{ fontSize: '11px', color: '#0284c7', marginTop: '2px', lineHeight: 1.3 }}>
-                          DP: {formatRupiah(invoice.amountPaid)} <br/>
-                          Sisa: {formatRupiah(invoice.balanceDue)}
+                          DP: {formatCurrency(invoice.amountPaid, invoice.currency)} <br/>
+                          Sisa: {formatCurrency(invoice.balanceDue, invoice.currency)}
                         </div>
                       )}
                       {(invoice.status === 'Menunggu' || invoice.status === 'Jatuh Tempo') && (invoice.amountPaid || 0) === 0 && (
                         <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px', lineHeight: 1.3 }}>
-                          Belum Bayar: {formatRupiah(invoice.balanceDue || invoice.amount)}
+                          Belum Bayar: {formatCurrency(invoice.balanceDue || invoice.amount, invoice.currency)}
                         </div>
                       )}
                       {(invoice.status === 'Menunggu' || invoice.status === 'Jatuh Tempo') && (invoice.amountPaid || 0) > 0 && (
                         <div style={{ fontSize: '11px', color: '#ca8a04', marginTop: '2px', lineHeight: 1.3 }}>
-                          Bayar: {formatRupiah(invoice.amountPaid)} <br/>
-                          Sisa: {formatRupiah(invoice.balanceDue)}
+                          Bayar: {formatCurrency(invoice.amountPaid, invoice.currency)} <br/>
+                          Sisa: {formatCurrency(invoice.balanceDue, invoice.currency)}
                         </div>
                       )}
                       {invoice.status === 'Lunas' && (
@@ -344,7 +383,7 @@ export default function InvoicesList() {
                           </button>
                         )}
                         <Link 
-                          href={`/dashboard/invoices/create?id=${invoice.id}`}
+                          href={`/dashboard/invoices/preview?id=${invoice.id}`}
                           style={{
                             padding: '4px 8px',
                             background: '#f1f5f9',
@@ -356,9 +395,26 @@ export default function InvoicesList() {
                             display: 'inline-flex',
                             alignItems: 'center'
                           }}
-                          title="Lihat & Cetak Invoice"
+                          title="Lihat Pratinjau Invoice"
                         >
                           Lihat
+                        </Link>
+                        <Link 
+                          href={`/dashboard/invoices/create?id=${invoice.id}`}
+                          style={{
+                            padding: '4px 8px',
+                            background: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#334155',
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center'
+                          }}
+                          title="Edit Invoice"
+                        >
+                          Edit
                         </Link>
                         <Link 
                           href={`/dashboard/expenses?invoiceId=${invoice.id}`}
@@ -612,7 +668,7 @@ export default function InvoicesList() {
             <div style={{ padding: '12px', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
               <div style={{ fontSize: '11px', color: '#16a34a', fontWeight: 600, textTransform: 'uppercase' }}>Sisa Tagihan Pelunasan</div>
               <div style={{ fontSize: '18px', fontWeight: 800, color: '#15803d', marginTop: '2px' }}>
-                {formatRupiah(settlementModal.remainingBalance)}
+                {formatCurrency(settlementModal.remainingBalance, invoices.find(i => i.id === settlementModal.invoiceId)?.currency || "IDR")}
               </div>
             </div>
             
@@ -664,7 +720,6 @@ export default function InvoicesList() {
           </div>
         </div>
       )}
-
     </div>
   );
 }

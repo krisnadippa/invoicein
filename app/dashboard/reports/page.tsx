@@ -11,20 +11,27 @@ interface ReportItem {
   collected: number;
   expense: number;
   status: "Paid" | "Pending" | "Overdue";
+  currency: string;
 }
 
 export default function ReportsPage() {
   // Company details for printing/header
   const [companyName, setCompanyName] = useState("Infinity Go Indonesia");
 
-  // Date range state - defaults dynamically to 1 month ago until today
+  // Date range state - defaults dynamically to the 1st of the current month until the end of the current month
   const [startDate, setStartDate] = useState(() => {
     const today = new Date();
-    today.setMonth(today.getMonth() - 1);
-    return today.toISOString().split("T")[0];
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}-01`;
   });
   const [endDate, setEndDate] = useState(() => {
-    return new Date().toISOString().split("T")[0];
+    const today = new Date();
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const year = lastDay.getFullYear();
+    const month = String(lastDay.getMonth() + 1).padStart(2, "0");
+    const day = String(lastDay.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   });
 
   // Fresh transaction dataset state
@@ -32,6 +39,22 @@ export default function ReportsPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Try loading from localStorage cache first
+    try {
+      const cached = localStorage.getItem("invoicein_cache_reports");
+      const savedComp = localStorage.getItem("companyDetails");
+      if (savedComp) {
+        const parsed = JSON.parse(savedComp);
+        if (parsed.companyName) setCompanyName(parsed.companyName);
+      }
+      if (cached) {
+        setAllTransactions(JSON.parse(cached));
+        setIsLoading(false); // Render immediately using cached data
+      }
+    } catch (e) {
+      console.warn("Error loading cached reports", e);
+    }
+
     async function loadData() {
       try {
         const savedComp = localStorage.getItem("companyDetails");
@@ -85,11 +108,13 @@ export default function ReportsPage() {
             expense: expenseTotal,
             status: inv.status === "Lunas" || inv.status === "Paid" 
               ? "Paid" 
-              : (inv.status === "Jatuh Tempo" || inv.status === "Overdue" ? "Overdue" : "Pending")
+              : (inv.status === "Jatuh Tempo" || inv.status === "Overdue" ? "Overdue" : "Pending"),
+            currency: inv.currency || "IDR"
           };
         });
 
         setAllTransactions(transactions);
+        localStorage.setItem("invoicein_cache_reports", JSON.stringify(transactions));
       } catch (e) {
         console.error("Error loading reports data:", e);
       } finally {
@@ -105,7 +130,7 @@ export default function ReportsPage() {
     return allTransactions.filter(item => {
       return item.date >= startDate && item.date <= endDate;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [startDate, endDate]);
+  }, [startDate, endDate, allTransactions]);
 
   // Aggregate stats
   const totals = useMemo(() => {
@@ -118,8 +143,16 @@ export default function ReportsPage() {
     return { invoiced, collected, expense, pending, profit };
   }, [filteredTransactions]);
 
-  const formatRupiah = (val: number) => {
-    return `Rp ${val.toLocaleString("id-ID")}`;
+  const formatCurrency = (val: number, currency: string = "IDR") => {
+    try {
+      return new Intl.NumberFormat(currency === "IDR" ? "id-ID" : "en-US", {
+        style: "currency",
+        currency: currency,
+        maximumFractionDigits: currency === "IDR" ? 0 : 2
+      }).format(val);
+    } catch (e) {
+      return `${currency === "IDR" ? "Rp" : currency} ${val.toLocaleString("id-ID")}`;
+    }
   };
 
   // Export to CSV Function
@@ -244,13 +277,13 @@ export default function ReportsPage() {
       <div className="dash-stats-grid" style={{ marginBottom: '24px' }}>
         <div className="dash-card stat-card">
           <div className="stat-title">Total Ditagih (Invoiced)</div>
-          <div className="stat-value" style={{ color: '#2563eb' }}>{formatRupiah(totals.invoiced)}</div>
+          <div className="stat-value" style={{ color: '#2563eb' }}>{formatCurrency(totals.invoiced)}</div>
           <div className="stat-subtitle">{filteredTransactions.length} invoice dalam rentang waktu</div>
         </div>
 
         <div className="dash-card stat-card">
           <div className="stat-title">Penerimaan Kas (Lunas)</div>
-          <div className="stat-value" style={{ color: '#16a34a' }}>{formatRupiah(totals.collected)}</div>
+          <div className="stat-value" style={{ color: '#16a34a' }}>{formatCurrency(totals.collected)}</div>
           <div className="stat-subtitle">
             {totals.invoiced > 0 ? `${Math.round((totals.collected / totals.invoiced) * 100)}% dari total tagihan` : "0%"}
           </div>
@@ -258,13 +291,13 @@ export default function ReportsPage() {
 
         <div className="dash-card stat-card">
           <div className="stat-title">Piutang / Pending</div>
-          <div className="stat-value" style={{ color: '#d97706' }}>{formatRupiah(totals.pending)}</div>
+          <div className="stat-value" style={{ color: '#d97706' }}>{formatCurrency(totals.pending)}</div>
           <div className="stat-subtitle">Menunggu pelunasan klien</div>
         </div>
 
         <div className="dash-card stat-card">
           <div className="stat-title">Estimasi Laba Bersih</div>
-          <div className="stat-value" style={{ color: '#7c3aed' }}>{formatRupiah(totals.profit)}</div>
+          <div className="stat-value" style={{ color: '#7c3aed' }}>{formatCurrency(totals.profit)}</div>
           <div className="stat-subtitle">Penerimaan dikurangi operasional</div>
         </div>
       </div>
@@ -321,16 +354,16 @@ export default function ReportsPage() {
                       {row.client}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px', fontWeight: 600 }}>
-                      {formatRupiah(row.invoiced)}
+                      {formatCurrency(row.invoiced, row.currency)}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px', fontWeight: 600, color: '#16a34a' }}>
-                      {formatRupiah(row.collected)}
+                      {formatCurrency(row.collected, row.currency)}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px', color: '#dc2626' }}>
-                      {formatRupiah(row.expense)}
+                      {formatCurrency(row.expense, row.currency)}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px', fontWeight: 700, color: '#7c3aed' }}>
-                      {formatRupiah(row.collected - row.expense)}
+                      {formatCurrency(row.collected - row.expense, row.currency)}
                     </td>
                     <td style={{ textAlign: 'center', padding: '12px' }}>
                       <span className={`status-badge status-${row.status.toLowerCase()}`}>
@@ -367,19 +400,19 @@ export default function ReportsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
             <div style={{ border: '1px solid #cbd5e1', padding: '10px', borderRadius: '6px' }}>
               <div style={{ fontSize: '11px', color: '#64748b' }}>Total Ditagih</div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#2563eb' }}>{formatRupiah(totals.invoiced)}</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#2563eb' }}>{formatCurrency(totals.invoiced)}</div>
             </div>
             <div style={{ border: '1px solid #cbd5e1', padding: '10px', borderRadius: '6px' }}>
               <div style={{ fontSize: '11px', color: '#64748b' }}>Total Kas Masuk</div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#16a34a' }}>{formatRupiah(totals.collected)}</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#16a34a' }}>{formatCurrency(totals.collected)}</div>
             </div>
             <div style={{ border: '1px solid #cbd5e1', padding: '10px', borderRadius: '6px' }}>
               <div style={{ fontSize: '11px', color: '#64748b' }}>Piutang / Pending</div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#d97706' }}>{formatRupiah(totals.pending)}</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#d97706' }}>{formatCurrency(totals.pending)}</div>
             </div>
             <div style={{ border: '1px solid #cbd5e1', padding: '10px', borderRadius: '6px' }}>
               <div style={{ fontSize: '11px', color: '#64748b' }}>Estimasi Laba Bersih</div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#7c3aed' }}>{formatRupiah(totals.profit)}</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#7c3aed' }}>{formatCurrency(totals.profit)}</div>
             </div>
           </div>
 
@@ -401,10 +434,10 @@ export default function ReportsPage() {
                   <td style={{ padding: '8px' }}>{item.date}</td>
                   <td style={{ padding: '8px', fontWeight: 600 }}>{item.invoiceNo}</td>
                   <td style={{ padding: '8px' }}>{item.client}</td>
-                  <td style={{ padding: '8px', textAlign: 'right' }}>{formatRupiah(item.invoiced)}</td>
-                  <td style={{ padding: '8px', textAlign: 'right', color: '#16a34a' }}>{formatRupiah(item.collected)}</td>
-                  <td style={{ padding: '8px', textAlign: 'right', color: '#dc2626' }}>{formatRupiah(item.expense)}</td>
-                  <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700 }}>{formatRupiah(item.collected - item.expense)}</td>
+                  <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.invoiced, item.currency)}</td>
+                  <td style={{ padding: '8px', textAlign: 'right', color: '#16a34a' }}>{formatCurrency(item.collected, item.currency)}</td>
+                  <td style={{ padding: '8px', textAlign: 'right', color: '#dc2626' }}>{formatCurrency(item.expense, item.currency)}</td>
+                  <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700 }}>{formatCurrency(item.collected - item.expense, item.currency)}</td>
                 </tr>
               ))}
             </tbody>

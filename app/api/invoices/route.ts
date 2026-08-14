@@ -23,6 +23,18 @@ export async function GET() {
 
     // Format like client expects
     const formattedInvoices = invoices.map((inv) => {
+      const cur = inv.currency || "IDR";
+      let formattedTotal = "";
+      try {
+        formattedTotal = new Intl.NumberFormat(cur === "IDR" ? "id-ID" : "en-US", {
+          style: "currency",
+          currency: cur,
+          maximumFractionDigits: cur === "IDR" ? 0 : 2
+        }).format(inv.totalAmount);
+      } catch (e) {
+        formattedTotal = `${cur === "IDR" ? "Rp" : cur} ${inv.totalAmount.toLocaleString("id-ID")}`;
+      }
+
       return {
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
@@ -35,8 +47,9 @@ export async function GET() {
         clientId: inv.clientId || "",
         date: inv.issueDate.toISOString().split("T")[0],
         due: inv.dueDate.toISOString().split("T")[0],
-        total: `Rp ${inv.totalAmount.toLocaleString("id-ID")}`,
+        total: formattedTotal,
         amount: inv.totalAmount,
+        currency: cur,
         subtotal: inv.subtotal,
         discount: inv.discount,
         taxRate: inv.taxRate,
@@ -44,7 +57,9 @@ export async function GET() {
         dpType: inv.downPaymentType,
         amountPaid: inv.amountPaid || 0,
         balanceDue: inv.balanceDue || 0,
-        status: inv.status === "Paid" ? "Lunas" : inv.status === "Pending" ? "Menunggu" : inv.status === "Overdue" ? "Jatuh Tempo" : inv.status === "Draft" ? "Draft" : inv.status,
+        status: inv.status === "Paid" 
+          ? "Lunas" 
+          : (inv.status === "Pending" && (inv.downPayment || 0) > 0 ? "DP" : (inv.status === "Pending" ? "Menunggu" : (inv.status === "Overdue" ? "Jatuh Tempo" : (inv.status === "Draft" ? "Draft" : inv.status)))),
         notes: inv.notes || "",
         paymentInstructions: inv.paymentInstructions || "",
         createdBy: inv.createdBy || "",

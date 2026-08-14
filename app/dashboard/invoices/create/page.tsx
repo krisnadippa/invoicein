@@ -62,6 +62,7 @@ function CreateInvoiceForm() {
   const [dueDate, setDueDate] = useState("2026-08-23");
   const [paymentTerms, setPaymentTerms] = useState("");
   const [createdBy, setCreatedBy] = useState("Finance Admin");
+  const [currency, setCurrency] = useState("IDR");
 
   // Client state
   const [clientName, setClientName] = useState("");
@@ -154,7 +155,12 @@ function CreateInvoiceForm() {
             setDpType(found.downPaymentType || "nominal");
             setNotes(found.notes || "");
             setPaymentInstructions(found.paymentInstructions || "");
-            setInvoiceStatus(found.status === "Paid" ? "Lunas" : found.status === "Pending" ? "Menunggu" : found.status === "Overdue" ? "Jatuh Tempo" : found.status === "Draft" ? "Draft" : found.status);
+            setInvoiceStatus(
+              found.status === "Paid" 
+                ? "Lunas" 
+                : (found.status === "Pending" && Number(found.downPayment) > 0 ? "DP" : (found.status === "Pending" ? "Menunggu" : (found.status === "Overdue" ? "Jatuh Tempo" : (found.status === "Draft" ? "Draft" : found.status))))
+            );
+            setCurrency(found.currency || "IDR");
           }
         })
         .catch(err => console.error("Error loading invoice detail", err));
@@ -244,7 +250,15 @@ function CreateInvoiceForm() {
   const remainingBalance = isLunas ? 0 : Math.max(0, totalAmount - dpAmount);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(amount);
+    try {
+      return new Intl.NumberFormat(currency === "IDR" ? "id-ID" : "en-US", {
+        style: "currency",
+        currency: currency,
+        maximumFractionDigits: currency === "IDR" ? 0 : 2
+      }).format(amount);
+    } catch (e) {
+      return `${currency === "IDR" ? "Rp" : currency} ${amount.toLocaleString("id-ID")}`;
+    }
   };
 
   const handlePrint = () => {
@@ -272,6 +286,7 @@ function CreateInvoiceForm() {
           clientAddress,
           issueDate: invoiceDate,
           dueDate,
+          currency,
           taxRate,
           downPayment,
           downPaymentType: dpType,
@@ -438,13 +453,20 @@ function CreateInvoiceForm() {
 
               <div className="form-group">
                 <label className="form-label">Mata Uang</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  value="IDR - Indonesian Rupiah (Rp)" 
-                  disabled 
-                  style={{ background: '#f1f5f9', cursor: 'not-allowed', color: '#64748b' }}
-                />
+                <select 
+                  className="form-select" 
+                  value={currency} 
+                  onChange={(e) => setCurrency(e.target.value)}
+                  style={{ width: '100%', padding: '10px', fontSize: '13px' }}
+                >
+                  <option value="IDR">IDR - Indonesian Rupiah (Rp)</option>
+                  <option value="USD">USD - US Dollar ($)</option>
+                  <option value="EUR">EUR - Euro (€)</option>
+                  <option value="SGD">SGD - Singapore Dollar (S$)</option>
+                  <option value="JPY">JPY - Japanese Yen (¥)</option>
+                  <option value="GBP">GBP - British Pound (£)</option>
+                  <option value="AUD">AUD - Australian Dollar (A$)</option>
+                </select>
               </div>
             </div>
           </div>
