@@ -4,13 +4,21 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-export const prisma =
+const basePrisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = basePrisma;
+
+export const prisma = basePrisma.$extends({
+  query: {
+    $allOperations({ model, operation, args, query }) {
+      return withDbRetry(() => query(args));
+    },
+  },
+});
 
 /**
  * Executes a database operation with automatic retry on Neon Serverless cold-starts.
@@ -27,6 +35,8 @@ export async function withDbRetry<T>(operation: () => Promise<T>, maxRetries = 2
         errMsg.includes("Can't reach database server") ||
         errMsg.includes("Connection terminated") ||
         errMsg.includes("connection closed") ||
+        errMsg.includes("Closed") ||
+        errMsg.includes("kind: Closed") ||
         errMsg.includes("timeout");
 
       if (isConnectionIssue && attempt < maxRetries) {
