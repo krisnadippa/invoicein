@@ -17,6 +17,7 @@ interface ReportItem {
 export default function ReportsPage() {
   // Company details for printing/header
   const [companyName, setCompanyName] = useState("Infinity Go Indonesia");
+  const [companyAddress, setCompanyAddress] = useState("");
 
   // Date range state - defaults dynamically to the 1st of the current month until the end of the current month
   const [startDate, setStartDate] = useState(() => {
@@ -63,14 +64,25 @@ export default function ReportsPage() {
           if (parsed.companyName) setCompanyName(parsed.companyName);
         }
 
-        // Fetch live database invoices and expenses
-        const [resInvoices, resExpenses] = await Promise.all([
+        // Fetch live database company profile, invoices and expenses
+        const [resCompany, resInvoices, resExpenses] = await Promise.all([
+          fetch("/api/company"),
           fetch("/api/invoices"),
           fetch("/api/expenses")
         ]);
 
+        const dataCompany = await resCompany.json();
         const dataInvoices = await resInvoices.json();
         const dataExpenses = await resExpenses.json();
+
+        if (dataCompany.success && dataCompany.company) {
+          if (dataCompany.company.companyName) {
+            setCompanyName(dataCompany.company.companyName);
+          }
+          if (dataCompany.company.companyAddress) {
+            setCompanyAddress(dataCompany.company.companyAddress);
+          }
+        }
 
         const invoicesList = dataInvoices.success ? dataInvoices.invoices : [];
         const expensesList = dataExpenses.success ? dataExpenses.expenses : [];

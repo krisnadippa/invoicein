@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { downloadInvoicePDF } from "@/lib/pdfGenerator";
+import { sendInvoiceToWhatsApp } from "@/lib/whatsappHelper";
 
 interface LineItem {
   id: string;
@@ -14,9 +16,12 @@ interface LineItem {
 function CreateInvoiceForm() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("id");
+  const printSheetRef = useRef<HTMLDivElement>(null);
 
   const [isClient, setIsClient] = useState(false);
   const [isSavedAlert, setIsSavedAlert] = useState(false);
+  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState("");
   const [savedClients, setSavedClients] = useState<any[]>([]);
   const [invoiceStatus, setInvoiceStatus] = useState<"Menunggu" | "Lunas" | "Jatuh Tempo" | "DP">("Menunggu");
   const [associatedExpenses, setAssociatedExpenses] = useState<any[]>([]);
@@ -197,6 +202,18 @@ function CreateInvoiceForm() {
         })
         .catch(err => console.error("Error generating invoice number", err));
     }
+
+    // Listen to real-time company updates
+    const handleCompanyUpdate = (e: any) => {
+      if (e.detail) {
+        setCompanyDetails(prev => ({ ...prev, ...e.detail }));
+      }
+    };
+    window.addEventListener("companyDetailsUpdated", handleCompanyUpdate);
+
+    return () => {
+      window.removeEventListener("companyDetailsUpdated", handleCompanyUpdate);
+    };
   }, [editId]);
 
   const handleAddItem = () => {
@@ -263,6 +280,56 @@ function CreateInvoiceForm() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDirectDownloadPDF = async () => {
+    if (!printSheetRef.current) return;
+    setIsDownloadingPDF(true);
+    try {
+      const fileName = `Invoice-${invoiceNumber || "INV"}.pdf`;
+      await downloadInvoicePDF(printSheetRef.current, {
+        fileName,
+        onProgress: (status) => setDownloadProgress(status)
+      });
+      showToast("Invoice PDF berhasil diunduh ke perangkat Anda!");
+    } catch (error) {
+      console.error("Download PDF error", error);
+      showToast("Gagal mengunduh PDF, silakan coba lagi.", "error");
+    } finally {
+      setIsDownloadingPDF(false);
+      setDownloadProgress("");
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    try {
+      const invoicePayload = {
+        invoiceNumber,
+        clientName: clientName || "Pelanggan",
+        clientPhone,
+        issueDate: invoiceDate,
+        dueDate,
+        currency,
+        subtotal,
+        taxRate: Number(taxRate) || 0,
+        totalAmount,
+        downPayment: Number(downPayment) || 0,
+        downPaymentType: dpType,
+        amountPaid: isLunas ? totalAmount : (invoiceStatus === "DP" ? dpAmount : 0),
+        balanceDue: remainingBalance,
+        status: isLunas ? "Lunas" : (invoiceStatus === "DP" ? "DP" : invoiceStatus),
+        notes,
+        items
+      };
+
+      const ok = sendInvoiceToWhatsApp(invoicePayload, companyDetails);
+      if (ok) {
+        showToast("Membuka WhatsApp untuk mengirim invoice...", "info");
+      }
+    } catch (err) {
+      console.error("WhatsApp share error:", err);
+      showToast("Gagal membuka WhatsApp", "error");
+    }
   };
 
   const proceedSaveInvoice = async () => {
@@ -925,7 +992,7 @@ function CreateInvoiceForm() {
               </div>
             )}
 
-            {/* Primary Action Button */}
+            {/* Primary Save Button */}
             <button 
               type="button" 
               onClick={handleSaveInvoice}
@@ -951,6 +1018,70 @@ function CreateInvoiceForm() {
               Simpan Invoice
             </button>
 
+            {/* Direct WhatsApp Share Button */}
+            <button 
+              type="button" 
+              onClick={handleShareWhatsApp}
+              style={{
+                width: '100%',
+                backgroundColor: '#25D366',
+                color: '#ffffff',
+                padding: '11px',
+                border: 'none',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: '0 2px 8px rgba(37, 211, 102, 0.25)',
+                marginBottom: '10px'
+              }}
+              title={clientPhone ? `Kirim ke WhatsApp ${clientPhone}` : "Kirim tagihan ke nomor WhatsApp customer"}
+            >
+              <svg width="17" height="17" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+              </svg>
+              Kirim ke WhatsApp
+            </button>
+
+            {/* Direct PDF Download Button */}
+            <button 
+              type="button" 
+              onClick={handleDirectDownloadPDF}
+              disabled={isDownloadingPDF}
+              style={{
+                width: '100%',
+                backgroundColor: '#0284c7',
+                color: '#ffffff',
+                border: 'none',
+                padding: '10px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: isDownloadingPDF ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                marginBottom: '10px',
+                opacity: isDownloadingPDF ? 0.75 : 1
+              }}
+            >
+              {isDownloadingPDF ? (
+                <>
+                  <div style={{ border: "2px solid #ffffff", borderTop: "2px solid transparent", borderRadius: "50%", width: "14px", height: "14px", animation: "spin 1s linear infinite" }} />
+                  <span>{downloadProgress || "Mengunduh PDF..."}</span>
+                </>
+              ) : (
+                <>
+                  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Unduh PDF Langsung
+                </>
+              )}
+            </button>
+
+            {/* Secondary Print Button */}
             <button 
               type="button" 
               onClick={handlePrint}
@@ -958,9 +1089,9 @@ function CreateInvoiceForm() {
                 width: '100%',
                 background: '#ffffff',
                 border: '1px solid #cbd5e1',
-                color: '#334155',
-                padding: '10px',
-                fontSize: '13px',
+                color: '#475569',
+                padding: '9px',
+                fontSize: '12px',
                 fontWeight: 600,
                 cursor: 'pointer',
                 display: 'flex',
@@ -970,8 +1101,8 @@ function CreateInvoiceForm() {
                 marginBottom: '10px'
               }}
             >
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-              Cetak & Unduh PDF
+              <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+              Cetak Printer (Print)
             </button>
           </div>
         </div>
@@ -980,16 +1111,20 @@ function CreateInvoiceForm() {
 
       {/* HIDDEN STRICT PRINT A4 TEMPLATE */}
       <div className="screen-hidden">
-        <div className="invoice-print-container" style={{ 
-          backgroundColor: '#ffffff', 
-          width: '100%', 
-          padding: '40px', 
-          display: 'flex',
-          flexDirection: 'column',
-          color: '#0f172a',
-          fontSize: '13px',
-          fontFamily: 'Arial, sans-serif'
-        }}>
+        <div 
+          ref={printSheetRef}
+          className="invoice-print-container" 
+          style={{ 
+            backgroundColor: '#ffffff', 
+            width: '100%', 
+            padding: '40px', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            color: '#0f172a', 
+            fontSize: '13px', 
+            fontFamily: 'Arial, sans-serif' 
+          }}
+        >
           
           {/* Invoice Header: Logo, Company Name below Logo, Email, and Phone below Email */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `2px solid ${companyDetails.themeColor}`, paddingBottom: '24px', marginBottom: '28px' }}>

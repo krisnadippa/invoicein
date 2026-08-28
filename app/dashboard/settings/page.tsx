@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { compressAndResizeImage } from "@/lib/imageUtils";
 
 export default function SettingsPage() {
   const [isClient, setIsClient] = useState(false);
@@ -38,11 +39,17 @@ export default function SettingsPage() {
       .then(res => res.json())
       .then(data => {
         if (data.success && data.company) {
-          setCompanyDetails(prev => ({
-            ...prev,
+          const fresh = {
+            ...companyDetails,
             ...data.company,
             logoBase64: data.company.logoBase64 || "",
-          }));
+          };
+          setCompanyDetails(fresh);
+          try {
+            localStorage.setItem("companyDetails", JSON.stringify(fresh));
+          } catch (e) {
+            console.warn("Could not cache company to local storage", e);
+          }
         }
       })
       .catch(err => {
@@ -55,14 +62,21 @@ export default function SettingsPage() {
     setCompanyDetails(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCompanyDetails(prev => ({ ...prev, logoBase64: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+      try {
+        // Compress and resize logo to max 600px for optimal speed and storage
+        const compressed = await compressAndResizeImage(file, 600, 600, 0.9);
+        setCompanyDetails(prev => ({ ...prev, logoBase64: compressed }));
+      } catch (err) {
+        console.error("Error processing logo image:", err);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setCompanyDetails(prev => ({ ...prev, logoBase64: reader.result as string }));
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -80,11 +94,28 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (data.success) {
+        const savedData = data.company || companyDetails;
+        
+        // Synchronize with LocalStorage
+        try {
+          localStorage.setItem("companyDetails", JSON.stringify(savedData));
+        } catch (e) {
+          console.warn("Storage sync failed", e);
+        }
+
+        // Dispatch real-time event across the dashboard shell and other active components
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("companyDetailsUpdated", { detail: savedData }));
+        }
+
         setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 3500);
+        setTimeout(() => setShowSuccessToast(false), 4000);
+      } else {
+        alert(data.message || "Gagal menyimpan pengaturan profil.");
       }
     } catch (err) {
       console.error("Failed to update company in DB", err);
+      alert("Terjadi kesalahan saat menyimpan pengaturan.");
     } finally {
       setIsSaving(false);
     }

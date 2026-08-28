@@ -41,15 +41,23 @@ export default function Sidebar({
   });
 
   useEffect(() => {
+    // 1. Sync directly from props whenever DashboardWrapper updates
+    setBrand({
+      name: propCompanyName || "Infinity Go Indonesia",
+      logo: propCompanyLogo || "",
+      industry: propIndustry || "Tour & Travel / Hospitality",
+      themeColor: propThemeColor || "#2563eb"
+    });
+
     try {
       const saved = localStorage.getItem("companyDetails");
       if (saved) {
         const parsed = JSON.parse(saved);
         setBrand({
-          name: parsed.companyName || propCompanyName || "Infinity Go Indonesia",
-          logo: parsed.logoBase64 || propCompanyLogo || "",
-          industry: parsed.industry || propIndustry || "Tour & Travel / Hospitality",
-          themeColor: parsed.themeColor || propThemeColor || "#2563eb"
+          name: propCompanyName || parsed.companyName || "Infinity Go Indonesia",
+          logo: propCompanyLogo !== undefined ? propCompanyLogo : (parsed.logoBase64 || ""),
+          industry: propIndustry || parsed.industry || "Tour & Travel / Hospitality",
+          themeColor: propThemeColor || parsed.themeColor || "#2563eb"
         });
       }
 
@@ -66,6 +74,23 @@ export default function Sidebar({
     } catch {
       // Ignore
     }
+
+    const handleUpdate = (e: any) => {
+      const comp = e.detail;
+      if (comp) {
+        setBrand({
+          name: comp.companyName || "Infinity Go Indonesia",
+          logo: comp.logoBase64 || "",
+          industry: comp.industry || "Tour & Travel / Hospitality",
+          themeColor: comp.themeColor || "#2563eb"
+        });
+      }
+    };
+
+    window.addEventListener("companyDetailsUpdated", handleUpdate);
+    return () => {
+      window.removeEventListener("companyDetailsUpdated", handleUpdate);
+    };
   }, [propCompanyName, propCompanyLogo, propIndustry, propThemeColor]);
 
   const navItems = [

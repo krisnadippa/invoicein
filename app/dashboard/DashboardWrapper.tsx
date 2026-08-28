@@ -24,7 +24,7 @@ export default function DashboardWrapper({ children }: { children: React.ReactNo
   });
   
   useEffect(() => {
-    // Read company details from local storage
+    // 1. Initial read from local storage for instant layout rendering
     try {
       const saved = localStorage.getItem("companyDetails");
       if (saved) {
@@ -54,8 +54,66 @@ export default function DashboardWrapper({ children }: { children: React.ReactNo
         }
       }
     } catch (e) {
-      console.error("Failed to parse company details", e);
+      console.error("Failed to parse local storage cache", e);
     }
+
+    // 2. Fetch fresh company profile from database
+    fetch("/api/company")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.company) {
+          const comp = data.company;
+          const compName = comp.companyName || "Infinity Go Indonesia";
+          setCompanyInfo({
+            name: compName,
+            logo: comp.logoBase64 || "",
+            industry: comp.industry || "Tour & Travel / Hospitality",
+            themeColor: comp.themeColor || "#2563eb"
+          });
+          setUserData(prev => ({
+            ...prev,
+            company: compName,
+            avatarInitial: compName.charAt(0).toUpperCase()
+          }));
+          try {
+            localStorage.setItem("companyDetails", JSON.stringify(comp));
+          } catch {}
+        }
+      })
+      .catch(err => console.error("Error fetching company details:", err));
+
+    // 3. Listen to real-time custom events when settings or logo are updated
+    const handleCompanyUpdate = (e: any) => {
+      const comp = e.detail;
+      if (comp) {
+        const compName = comp.companyName || "Infinity Go Indonesia";
+        setCompanyInfo({
+          name: compName,
+          logo: comp.logoBase64 || "",
+          industry: comp.industry || "Tour & Travel / Hospitality",
+          themeColor: comp.themeColor || "#2563eb"
+        });
+        setUserData(prev => ({
+          ...prev,
+          company: compName,
+          avatarInitial: compName.charAt(0).toUpperCase()
+        }));
+      }
+    };
+
+    window.addEventListener("companyDetailsUpdated", handleCompanyUpdate);
+    window.addEventListener("storage", (e) => {
+      if (e.key === "companyDetails" && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          handleCompanyUpdate({ detail: parsed });
+        } catch {}
+      }
+    });
+
+    return () => {
+      window.removeEventListener("companyDetailsUpdated", handleCompanyUpdate);
+    };
   }, []);
 
   useEffect(() => {
