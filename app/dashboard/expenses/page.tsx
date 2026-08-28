@@ -13,7 +13,10 @@ interface Expense {
 
 interface Invoice {
   id: string;
-  client: string;
+  invoiceNumber?: string;
+  client?: string;
+  clientName?: string;
+  customer?: string;
   amount: number;
   date: string;
   due: string;
@@ -254,29 +257,41 @@ function ExpensesContent() {
         )}
       </div>
 
-      {/* Invoice Selector Row */}
+      {/* Customer Selector Row */}
       <div className="dash-card" style={{ padding: '20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Pilih Invoice Tagihan</label>
+          <label style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Pilih Nama Customer</label>
           <select 
             value={selectedInvoiceId}
             onChange={(e) => setSelectedInvoiceId(e.target.value)}
             className="form-select"
-            style={{ minWidth: '280px', padding: '10px', fontSize: '14px', borderRadius: '6px' }}
+            style={{ minWidth: '320px', padding: '10px 14px', fontSize: '14px', borderRadius: '6px' }}
           >
-            <option value="">-- Pilih Nomor Invoice --</option>
-            {invoices.map(inv => (
-              <option key={inv.id} value={inv.id}>{inv.id} - {inv.client} ({formatRupiah(inv.amount)})</option>
-            ))}
+            <option value="">-- Pilih Nama Customer --</option>
+            {invoices.map(inv => {
+              const name = inv.clientName || inv.customer || inv.client || "Customer";
+              const invNum = inv.invoiceNumber ? ` • ${inv.invoiceNumber}` : "";
+              return (
+                <option key={inv.id} value={inv.id}>
+                  {name}{invNum} ({formatRupiah(inv.amount)})
+                </option>
+              );
+            })}
           </select>
         </div>
 
         {selectedInvoice && (
           <div style={{ display: 'flex', gap: '24px', marginLeft: 'auto', flexWrap: 'wrap', background: '#f8fafc', padding: '12px 20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <div>
-              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>KLIEN</div>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{selectedInvoice.client}</div>
+              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>NAMA CUSTOMER</div>
+              <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>{selectedInvoice.clientName || selectedInvoice.customer || selectedInvoice.client}</div>
             </div>
+            {selectedInvoice.invoiceNumber && (
+              <div>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>NO. INVOICE</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#2563eb' }}>{selectedInvoice.invoiceNumber}</div>
+              </div>
+            )}
             <div>
               <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>TGL TERBIT</div>
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{selectedInvoice.date}</div>
@@ -297,13 +312,13 @@ function ExpensesContent() {
           <div className="dash-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '24px' }}>
             
             <div className="dash-card stat-card" style={{ padding: '20px' }}>
-              <div className="stat-title" style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Pendapatan Invoice (Income)</div>
+              <div className="stat-title" style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Pendapatan Tagihan (Income)</div>
               <div className="stat-value" style={{ fontSize: '22px', fontWeight: 800, color: '#16a34a', marginTop: '6px' }}>{formatRupiah(totalIncome)}</div>
-              <div className="stat-subtitle" style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>Nilai Tagihan Terbit</div>
+              <div className="stat-subtitle" style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>Nilai Tagihan Customer</div>
             </div>
 
             <div className="dash-card stat-card" style={{ padding: '20px' }}>
-              <div className="stat-title" style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Total Pengeluaran Invoice</div>
+              <div className="stat-title" style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Total Pengeluaran</div>
               <div className="stat-value" style={{ fontSize: '22px', fontWeight: 800, color: '#dc2626', marginTop: '6px' }}>{formatRupiah(totalExpenses)}</div>
               <div className="stat-subtitle" style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>Total Biaya Operasional</div>
             </div>
@@ -318,8 +333,14 @@ function ExpensesContent() {
 
           {/* Expenses Table */}
           <div className="dash-card" style={{ padding: '24px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px', color: 'var(--foreground)' }}>
-              Rincian Pengeluaran untuk Invoice {selectedInvoiceId}
+            <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px', color: 'var(--foreground)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span>Rincian Pengeluaran untuk Customer:</span>
+              <span style={{ color: '#2563eb' }}>{selectedInvoice ? (selectedInvoice.clientName || selectedInvoice.customer || selectedInvoice.client) : ""}</span>
+              {selectedInvoice?.invoiceNumber && (
+                <span style={{ fontSize: '12px', background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: '4px', border: '1px solid #bfdbfe', fontWeight: 600 }}>
+                  {selectedInvoice.invoiceNumber}
+                </span>
+              )}
             </h2>
             <div className="table-responsive-wrapper">
               <table className="invoice-table" style={{ width: '100%', minWidth: '700px' }}>
@@ -379,7 +400,7 @@ function ExpensesContent() {
                   ) : (
                     <tr>
                       <td colSpan={4} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>
-                        Belum ada item pengeluaran dicatat untuk invoice ini.
+                        Belum ada item pengeluaran dicatat untuk customer ini.
                       </td>
                     </tr>
                   )}
@@ -390,7 +411,7 @@ function ExpensesContent() {
         </>
       ) : (
         <div style={{ textAlign: 'center', padding: '48px 24px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px' }}>
-          <p style={{ margin: 0, color: '#64748b', fontWeight: 600 }}>Pilih salah satu invoice di atas untuk mengelola detail pengeluaran item.</p>
+          <p style={{ margin: 0, color: '#64748b', fontWeight: 600 }}>Pilih salah satu customer di atas untuk mengelola detail pengeluaran item.</p>
         </div>
       )}
 
@@ -423,6 +444,17 @@ function ExpensesContent() {
                 ✕
               </button>
             </div>
+
+            {selectedInvoice && (
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', color: '#334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Customer: <strong style={{ color: '#0f172a' }}>{selectedInvoice.clientName || selectedInvoice.customer || selectedInvoice.client}</strong></span>
+                {selectedInvoice.invoiceNumber && (
+                  <span style={{ fontSize: '11px', background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px', fontWeight: 600, color: '#475569' }}>
+                    {selectedInvoice.invoiceNumber}
+                  </span>
+                )}
+              </div>
+            )}
 
             <form onSubmit={handleSaveExpense} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group">
