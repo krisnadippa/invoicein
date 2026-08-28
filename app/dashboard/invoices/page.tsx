@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { sendInvoiceToWhatsApp } from "@/lib/whatsappHelper";
+import { sendInvoiceToWhatsApp, sendInvoicePDFDirectToWhatsApp } from "@/lib/whatsappHelper";
 
 export default function InvoicesList() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -109,7 +109,7 @@ export default function InvoicesList() {
     setSettlementModal(prev => ({ ...prev, isOpen: false }));
   };
 
-  const handleShareWhatsApp = (inv: any) => {
+  const handleShareWhatsApp = async (inv: any) => {
     try {
       const isLunas = inv.status === "Paid" || inv.status === "Lunas";
       const totalAmount = inv.amount || inv.totalAmount || 0;
@@ -123,25 +123,30 @@ export default function InvoicesList() {
         invoiceNumber: inv.invoiceNumber || inv.id,
         clientName: inv.clientName || inv.client || inv.customer || "Pelanggan",
         clientPhone: inv.clientPhone || inv.phone || "",
+        clientAddress: inv.clientAddress || "",
         issueDate: inv.date || inv.issueDate,
         dueDate: inv.due || inv.dueDate,
         currency: inv.currency || "IDR",
+        subtotal: inv.subtotal || totalAmount,
+        taxRate: inv.taxRate || 0,
         totalAmount,
         downPayment: rawDp,
         downPaymentType: inv.dpType || inv.downPaymentType || "nominal",
         amountPaid: isLunas ? totalAmount : (inv.amountPaid !== undefined ? inv.amountPaid : dpAmount),
         balanceDue,
         status: inv.status,
-        notes: inv.notes
+        notes: inv.notes,
+        items: inv.items
       };
 
-      const ok = sendInvoiceToWhatsApp(payload, companyDetails);
-      if (ok) {
-        showToast("Membuka WhatsApp untuk mengirim invoice...", "info");
+      showToast("Menyiapkan berkas PDF & membuka WhatsApp...", "info");
+      const res = await sendInvoicePDFDirectToWhatsApp(payload, companyDetails);
+      if (res.success) {
+        showToast(res.message, "success");
       }
     } catch (err) {
       console.error("WhatsApp share error:", err);
-      showToast("Gagal membuka WhatsApp", "error");
+      showToast("Gagal membagikan invoice ke WhatsApp", "error");
     }
   };
 
