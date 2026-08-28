@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { downloadInvoicePDF } from "@/lib/pdfGenerator";
-import { sendInvoiceToWhatsApp } from "@/lib/whatsappHelper";
+import { sendInvoiceToWhatsApp, shareInvoicePDFToWhatsApp } from "@/lib/whatsappHelper";
 
 interface LineItem {
   id: string;
@@ -301,7 +301,9 @@ function CreateInvoiceForm() {
     }
   };
 
-  const handleShareWhatsApp = () => {
+  const handleShareWhatsApp = async () => {
+    if (!printSheetRef.current) return;
+    setIsDownloadingPDF(true);
     try {
       const invoicePayload = {
         invoiceNumber,
@@ -322,13 +324,22 @@ function CreateInvoiceForm() {
         items
       };
 
-      const ok = sendInvoiceToWhatsApp(invoicePayload, companyDetails);
-      if (ok) {
-        showToast("Membuka WhatsApp untuk mengirim invoice...", "info");
+      const res = await shareInvoicePDFToWhatsApp(
+        printSheetRef.current,
+        invoicePayload,
+        companyDetails,
+        clientPhone,
+        (status) => setDownloadProgress(status)
+      );
+      if (res.success) {
+        showToast(res.message, "success");
       }
     } catch (err) {
-      console.error("WhatsApp share error:", err);
-      showToast("Gagal membuka WhatsApp", "error");
+      console.error("WhatsApp PDF share error:", err);
+      showToast("Gagal membagikan invoice PDF ke WhatsApp", "error");
+    } finally {
+      setIsDownloadingPDF(false);
+      setDownloadProgress("");
     }
   };
 

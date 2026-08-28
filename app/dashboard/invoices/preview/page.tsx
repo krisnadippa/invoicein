@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { downloadInvoicePDF } from "@/lib/pdfGenerator";
-import { sendInvoiceToWhatsApp } from "@/lib/whatsappHelper";
+import { sendInvoiceToWhatsApp, shareInvoicePDFToWhatsApp } from "@/lib/whatsappHelper";
 
 function InvoicePreviewContent() {
   const searchParams = useSearchParams();
@@ -117,16 +117,26 @@ function InvoicePreviewContent() {
     }
   };
 
-  const handleShareWhatsApp = () => {
-    if (!invoice) return;
+  const handleShareWhatsApp = async () => {
+    if (!invoice || !sheetRef.current) return;
+    setIsDownloadingPDF(true);
     try {
-      const ok = sendInvoiceToWhatsApp(invoice, companyDetails);
-      if (ok) {
-        showToast("Membuka WhatsApp untuk mengirim invoice...", "info");
+      const res = await shareInvoicePDFToWhatsApp(
+        sheetRef.current,
+        invoice,
+        companyDetails,
+        undefined,
+        (status) => setDownloadProgress(status)
+      );
+      if (res.success) {
+        showToast(res.message, "success");
       }
     } catch (err) {
-      console.error("WhatsApp share error:", err);
-      showToast("Gagal membuka WhatsApp", "error");
+      console.error("WhatsApp PDF share error:", err);
+      showToast("Gagal membagikan invoice PDF ke WhatsApp", "error");
+    } finally {
+      setIsDownloadingPDF(false);
+      setDownloadProgress("");
     }
   };
 

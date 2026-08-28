@@ -1,3 +1,5 @@
+import { generateInvoicePDFBlob } from "./pdfGenerator";
+
 /**
  * WhatsApp Integration Utilities for Invoice.In
  */
@@ -134,7 +136,7 @@ export function generateInvoiceWhatsAppMessage(
 }
 
 /**
- * Direct WhatsApp dispatch function.
+ * Direct WhatsApp dispatch function (Text only).
  * If phone is provided, opens wa.me link directly.
  * If not provided, prompts the user to enter the number.
  */
@@ -165,3 +167,85 @@ export function sendInvoiceToWhatsApp(
   window.open(waUrl, "_blank");
   return true;
 }
+
+/**
+ * Shares the actual Invoice PDF file directly to WhatsApp.
+ * - On Mobile / Web Share API supported browsers: Uses navigator.share() with the PDF file, directly attaching the PDF to WhatsApp.
+ * - On Desktop / browsers without Web Share: Downloads the PDF file automatically and opens WhatsApp Chat with the customer.
+ */
+export async function shareInvoicePDFToWhatsApp(
+  element: HTMLElement,
+  invoice: InvoiceWhatsAppPayload,
+  company: CompanyWhatsAppPayload,
+  customPhone?: string,
+  onProgress?: (status: string) => void
+): Promise<{ success: boolean; method: "native_share" | "download_and_chat"; message: string }> {
+  let targetPhone = customPhone || invoice.clientPhone || "";
+  targetPhone = formatWhatsAppNumber(targetPhone);
+
+  if (!targetPhone) {
+    const input = window.prompt(
+      "Nomor WhatsApp customer belum terdaftar. Silakan masukkan nomor WhatsApp customer (contoh: 081234567890):"
+    );
+    if (!input) return { success: false, method: "native_share", message: "Batal mengirim" };
+    targetPhone = formatWhatsAppNumber(input);
+  }
+
+  if (!targetPhone || targetPhone.length < 7) {
+    alert("Nomor WhatsApp tidak valid. Silakan periksa kembali.");
+    return { success: false, method: "native_share", message: "Nomor WhatsApp tidak valid" };
+  }
+
+  const fileName = `Invoice-${invoice.invoiceNumber || "INV"}.pdf`;
+  const { file, blob } = await generateInvoicePDFBlob(element, {
+    fileName,
+    onProgress
+  });
+
+  const message = generateInvoiceWhatsAppMessage(invoice, company);
+
+  // 1. Check if Web Share API with Files is supported (Mobile Safari, Chrome Android, etc.)
+  if (
+    typeof navigator !== "undefined" &&
+    navigator.canShare &&
+    navigator.canShare({ files: [file] })
+  ) {
+    try {
+      onProgress?.("Membuka aplikasi WhatsApp...");
+      await navigator.share({
+        files: [file],
+        title: fileName,
+        text: message
+      });
+      return { success: true, method: "native_share", message: "Berkas PDF berhasil dikirim ke WhatsApp!" };
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        return { success: false, method: "native_share", message: "Pengiriman dibatalkan." };
+      }
+      console.warn("Navigator share failed, falling back to download & chat:", err);
+    }
+  }
+
+  // 2. Fallback for Desktop Browsers:
+  // Automatically trigger PDF file download and open WhatsApp Web/App chat to customer
+  onProgress?.("Mengunduh berkas PDF & membuka WhatsApp...");
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  // Open WhatsApp Web with the customer number and formatted invoice details
+  const waUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(message)}`;
+  window.open(waUrl, "_blank");
+
+  return {
+    success: true,
+    method: "download_and_chat",
+    message: "Berkas PDF Invoice telah diunduh! Silakan lampirkan berkas ke chat WhatsApp yang telah dibuka."
+  };
+}
+

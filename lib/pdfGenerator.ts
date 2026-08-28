@@ -87,3 +87,75 @@ export async function downloadInvoicePDF(
     throw error;
   }
 }
+
+/**
+ * Generates a PDF File object (Blob) from an HTML element for direct file sharing.
+ */
+export async function generateInvoicePDFBlob(
+  element: HTMLElement,
+  options: PDFGenerateOptions = {}
+): Promise<{ blob: Blob; file: File; fileName: string }> {
+  const {
+    fileName = "Invoice.pdf",
+    scale = 2,
+    onProgress
+  } = options;
+
+  try {
+    onProgress?.("Menyiapkan dokumen...");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    onProgress?.("Merender invoice ke format PDF...");
+    const canvas = await html2canvas(element, {
+      scale: scale,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: "#ffffff",
+      windowWidth: 1024,
+    });
+
+    onProgress?.("Menyusun berkas PDF A4...");
+    const imgData = canvas.toDataURL("image/png", 1.0);
+
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+      compress: true
+    });
+
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+
+    const imgProps = pdf.getImageProperties(imgData);
+    const imgRatio = imgProps.height / imgProps.width;
+    const contentHeight = pdfWidth * imgRatio;
+
+    if (contentHeight <= pdfHeight) {
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, contentHeight, undefined, "FAST");
+    } else {
+      let heightLeft = contentHeight;
+      let position = 0;
+      pdf.addImage(imgData, "PNG", 0, position, pdfWidth, contentHeight, undefined, "FAST");
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - contentHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, pdfWidth, contentHeight, undefined, "FAST");
+        heightLeft -= pdfHeight;
+      }
+    }
+
+    const pdfBlob = pdf.output("blob");
+    const actualFileName = fileName.endsWith(".pdf") ? fileName : `${fileName}.pdf`;
+    const pdfFile = new File([pdfBlob], actualFileName, { type: "application/pdf" });
+
+    return { blob: pdfBlob, file: pdfFile, fileName: actualFileName };
+  } catch (error) {
+    console.error("Failed to generate PDF Blob:", error);
+    throw error;
+  }
+}
+
